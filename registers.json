@@ -1,0 +1,47 @@
+{
+    "AG": {
+        "size": 4,
+        "pointer": 0,
+        "children": {
+            "AL": 0
+        }
+    },
+    "AL": {
+        "size": 1,
+        "pointer": 1
+    },
+    "BG": {
+        "size": 4,
+        "pointer": 4,
+        "children": {
+            "BL": 0
+        }
+    },
+    "BL": {
+        "size": 1,
+        "pointer": 5
+    },
+    "CG": {
+        "size": 4,
+        "pointer": 8,
+        "children": {
+            "CL": 0
+        }
+    },
+    "CL": {
+        "size": 1,
+        "pointer": 9
+    },
+    "IP": {
+        "size": 2,
+        "pointer": 128
+    },
+    "SP": {
+        "size": 2,
+        "pointer": 160
+    },
+    "FL": {
+        "size": 1,
+        "pointer": 192
+    }    
+}

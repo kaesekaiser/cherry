@@ -15,16 +15,13 @@ def convert_to_bits(data: SupportsBitConversion, length: int = 8) -> list[int]:
     elif isinstance(data, list):
         return data[:length] + [0 for _ in range(len(data), length)]
     elif isinstance(data, Byte):
-        return data.bits
+        return data.bits[:length] + [0 for _ in range(len(data), length)]
 
 
 class Byte:  # not a fan of the built-in binary classes
     def __init__(self, data: SupportsBitConversion = 0, size: int = 8):
         self.size = size
-        if data:
-            self.bits = convert_to_bits(data, length=self.size)
-        else:
-            self.bits = [0 for _ in range(self.size)]
+        self.bits = convert_to_bits(data, length=self.size)
 
     @staticmethod
     def from_list(ls: list[int]):
@@ -105,5 +102,5 @@ class ByteArray(Byte):
 
     def __getitem__(self, item) -> Byte:
         if isinstance(item, slice):
-            return Byte.from_list(self.bits[item])
+            return Byte.from_list([j for g in self.bytes[item] for j in g.bits])
         return self.bytes[item]

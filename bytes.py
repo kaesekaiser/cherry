@@ -3,7 +3,7 @@ import re
 from math import ceil
 
 
-_instruction_set = json.load(open("opcodes.json"))
+_instruction_set = json.load(open("instructions.json"))
 opcodes = {g["code"]: g for g in _instruction_set}
 
 

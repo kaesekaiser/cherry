@@ -1,0 +1,114 @@
+{
+    "NOP": {
+        "code": 0,
+        "arg_bytes": 0
+    },
+    "HLT": {
+        "code": 15,
+        "arg_bytes": 0
+    },
+    "PUSH-RB": {
+        "code": 64,
+        "arg_bytes": 1
+    },
+    "PUSH-AB": {
+        "code": 65,
+        "arg_bytes": 1
+    },
+    "PUSH-LB": {
+        "code": 66,
+        "arg_bytes": 1
+    },
+    "PUSH-RW": {
+        "code": 72,
+        "arg_bytes": 1
+    },
+    "PUSH-AW": {
+        "code": 73,
+        "arg_bytes": 1
+    },
+    "PUSH-LW": {
+        "code": 74,
+        "arg_bytes": 4
+    },
+    "POP-B": {
+        "code": 80,
+        "arg_bytes": 1
+    },
+    "POP-W": {
+        "code": 88,
+        "arg_bytes": 1
+    },
+    "MOV-RRB": {
+        "code": 96,
+        "arg_bytes": 2
+    },
+    "MOV-ARB": {
+        "code": 97,
+        "arg_bytes": 2
+    },
+    "MOV-LRB": {
+        "code": 98,
+        "arg_bytes": 2
+    },
+    "MOV-RAB": {
+        "code": 99,
+        "arg_bytes": 2
+    },
+    "MOV-LAB": {
+        "code": 100,
+        "arg_bytes": 2
+    },
+    "MOV-RMB": {
+        "code": 101,
+        "arg_bytes": 3
+    },
+    "MOV-LMB": {
+        "code": 102,
+        "arg_bytes": 3
+    },
+    "MOV-MRB": {
+        "code": 103,
+        "arg_bytes": 3
+    },
+    "MOV-RRW": {
+        "code": 104,
+        "arg_bytes": 2
+    },
+    "MOV-ARW": {
+        "code": 105,
+        "arg_bytes": 2
+    },
+    "MOV-LRW": {
+        "code": 106,
+        "arg_bytes": 5
+    },
+    "MOV-RAW": {
+        "code": 107,
+        "arg_bytes": 2
+    },
+    "MOV-LAW": {
+        "code": 108,
+        "arg_bytes": 5
+    },
+    "MOV-RMW": {
+        "code": 109,
+        "arg_bytes": 3
+    },
+    "MOV-LMW": {
+        "code": 110,
+        "arg_bytes": 6
+    },
+    "MOV-MRW": {
+        "code": 111,
+        "arg_bytes": 3
+    },
+    "IFZ": {
+        "code": 192,
+        "arg_bytes": 0
+    },
+    "IFNZ": {
+        "code": 208,
+        "arg_bytes": 0
+    }
+}

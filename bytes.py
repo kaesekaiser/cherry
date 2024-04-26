@@ -3,8 +3,8 @@ import re
 from math import ceil
 
 
-opcodes = json.load(open("opcodes.json"))
-mnemonics = {j["code"]: g for g, j in opcodes.items()}
+_instruction_set = json.load(open("opcodes.json"))
+opcodes = {g["code"]: g for g in _instruction_set}
 
 
 class BitError(ValueError):
@@ -57,7 +57,7 @@ class Byte:  # not a fan of the built-in binary classes
 
     @property
     def mnemonic(self) -> str:
-        return mnemonics.get(self.value)
+        return opcodes.get(self.value, {})["mnemonic"]
 
     def __len__(self):
         return len(self.bits)
@@ -134,8 +134,12 @@ class ByteArray(Byte):
         return " ".join(g.hex for g in self.bytes)
 
     @property
+    def opcode(self):
+        return self.bytes[0].value
+
+    @property
     def mnemonic(self) -> str:
-        return mnemonics.get(self[0].value)
+        return self.bytes[0].mnemonic
 
     def __str__(self):
         return " ".join(str(g) for g in self.bytes)

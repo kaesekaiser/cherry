@@ -1,106 +1,132 @@
-{
-    "NOP": {
+[
+    {
         "code": 0,
+        "mnemonic": "NOP",
         "arg_bytes": 0
     },
-    "HLT": {
+    {
         "code": 15,
+        "mnemonic": "HLT",
         "arg_bytes": 0
     },
-    "PUSH-RB": {
+    {
         "code": 64,
+        "mnemonic": "PUSH-RB",
         "arg_bytes": 1
     },
-    "PUSH-LB": {
+    {
         "code": 65,
+        "mnemonic": "PUSH-LB",
         "arg_bytes": 1
     },
-    "PUSH-RW": {
+    {
         "code": 72,
+        "mnemonic": "PUSH-RW",
         "arg_bytes": 1
     },
-    "PUSH-LW": {
+    {
         "code": 73,
+        "mnemonic": "PUSH-LW",
         "arg_bytes": 4
     },
-    "POP-B": {
+    {
         "code": 80,
+        "mnemonic": "POP-B",
         "arg_bytes": 1
     },
-    "POP-W": {
+    {
         "code": 88,
+        "mnemonic": "POP-W",
         "arg_bytes": 1
     },
-    "MOV-RRB": {
+    {
         "code": 96,
+        "mnemonic": "MOV-RRB",
         "arg_bytes": 2
     },
-    "MOV-ARB": {
+    {
         "code": 97,
+        "mnemonic": "MOV-ARB",
         "arg_bytes": 2
     },
-    "MOV-LRB": {
+    {
         "code": 98,
+        "mnemonic": "MOV-LRB",
         "arg_bytes": 2
     },
-    "MOV-RAB": {
+    {
         "code": 99,
+        "mnemonic": "MOV-RAB",
         "arg_bytes": 2
     },
-    "MOV-LAB": {
+    {
         "code": 100,
+        "mnemonic": "MOV-LAB",
         "arg_bytes": 2
     },
-    "MOV-RMB": {
+    {
         "code": 101,
+        "mnemonic": "MOV-RMB",
         "arg_bytes": 3
     },
-    "MOV-LMB": {
+    {
         "code": 102,
+        "mnemonic": "MOV-LMB",
         "arg_bytes": 3
     },
-    "MOV-MRB": {
+    {
         "code": 103,
+        "mnemonic": "MOV-MRB",
         "arg_bytes": 3
     },
-    "MOV-RRW": {
+    {
         "code": 104,
+        "mnemonic": "MOV-RRW",
         "arg_bytes": 2
     },
-    "MOV-ARW": {
+    {
         "code": 105,
+        "mnemonic": "MOV-ARW",
         "arg_bytes": 2
     },
-    "MOV-LRW": {
+    {
         "code": 106,
+        "mnemonic": "MOV-LRW",
         "arg_bytes": 5
     },
-    "MOV-RAW": {
+    {
         "code": 107,
+        "mnemonic": "MOV-RAW",
         "arg_bytes": 2
     },
-    "MOV-LAW": {
+    {
         "code": 108,
+        "mnemonic": "MOV-LAW",
         "arg_bytes": 5
     },
-    "MOV-RMW": {
+    {
         "code": 109,
+        "mnemonic": "MOV-RMW",
         "arg_bytes": 3
     },
-    "MOV-LMW": {
+    {
         "code": 110,
+        "mnemonic": "MOV-LMW",
         "arg_bytes": 6
     },
-    "MOV-MRW": {
+    {
         "code": 111,
+        "mnemonic": "MOV-MRW",
         "arg_bytes": 3
     },
-    "IFZ": {
+    {
         "code": 192,
+        "mnemonic": "IFZ",
         "arg_bytes": 0
     },
-    "IFNZ": {
+    {
         "code": 208,
+        "mnemonic": "IFNZ",
         "arg_bytes": 0
     }
-}
+]

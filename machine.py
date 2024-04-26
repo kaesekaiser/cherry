@@ -143,7 +143,7 @@ class Machine:
                 break
             else:
                 self.execute_instruction(next_instruction)
-            self.write_to_register("IP", instruction_pointer + opcodes[next_instruction.mnemonic]["arg_bytes"] + 1)
+            self.write_to_register("IP", instruction_pointer + opcodes[next_instruction.opcode]["arg_bytes"] + 1)
             print(self.state_map)
             self.operation_counter += 1
         print("System halted.")

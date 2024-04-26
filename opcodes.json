@@ -11,24 +11,16 @@
         "code": 64,
         "arg_bytes": 1
     },
-    "PUSH-AB": {
-        "code": 65,
-        "arg_bytes": 1
-    },
     "PUSH-LB": {
-        "code": 66,
+        "code": 65,
         "arg_bytes": 1
     },
     "PUSH-RW": {
         "code": 72,
         "arg_bytes": 1
     },
-    "PUSH-AW": {
-        "code": 73,
-        "arg_bytes": 1
-    },
     "PUSH-LW": {
-        "code": 74,
+        "code": 73,
         "arg_bytes": 4
     },
     "POP-B": {

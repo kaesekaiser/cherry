@@ -2,10 +2,11 @@ from bytes import *
 
 
 class Register:
-    def __init__(self, size: int, data: SupportsBitConversion | Byte = 0, children: dict[str, int] = ()):
+    def __init__(self, size: int, data: SupportsBitConversion | Byte = 0, children: dict[str, int] = (), **kwargs):
         self.size = size
         self.bits = convert_to_bits(data, length=self.size * 8)
         self.children = dict(children)
+        self.name = kwargs.get("name")
 
     @property
     def bytes(self):
@@ -21,7 +22,7 @@ class Register:
 
     @staticmethod
     def from_json(js: dict):
-        return Register(size=js["size"], data=js.get("data", 0), children=js.get("children", {}))
+        return Register(**js)
 
     def __getitem__(self, item) -> Byte | ByteArray:
         return self.bytes[item]
@@ -32,13 +33,6 @@ class Register:
     def write(self, data: SupportsBitConversion | Byte):
         self.bits = convert_to_bits(data, length=self.size * 8)
 
-
-class Drive(Register):
-    def read(self, address: int | ByteArray, no_bytes: int) -> Byte:
-        if isinstance(address, ByteArray):
-            address = address.value
-        return ByteArray.from_list(self.bits[address*8:(address+no_bytes)*8])
-
     def write_at(self, address: int | ByteArray, data: SupportsBitConversion | Byte, no_bytes: int):
         if isinstance(address, ByteArray):
             address = address.value
@@ -47,11 +41,19 @@ class Drive(Register):
             del self.bits[self.size*8:]
 
 
+class Drive(Register):
+    def read(self, address: int | ByteArray, no_bytes: int) -> Byte:
+        if isinstance(address, ByteArray):
+            address = address.value
+        return ByteArray.from_list(self.bits[address*8:(address+no_bytes)*8])
+
+
 class Machine:
     def __init__(self):
         registers = json.load(open("registers.json"))
-        self.registers = {k: Register.from_json(v) for k, v in registers.items()}
+        self.registers = {k: Register.from_json({"name": k, **v}) for k, v in registers.items()}
         self.register_pointers = {v["pointer"]: k for k, v in registers.items()}
+        self.parent_registers = {j: g for g in self.registers.values() for j in g.children}
         self.memory = Drive(65536)  # just implementing memory as a continuous linear address space w/o paging
         self.operation_counter = 0
 
@@ -72,6 +74,14 @@ class Machine:
         (register := self.get_register(pointer)).write(data)
         for k, v in register.children.items():
             self.get_register(k).write(register.bytes[v:])
+        if parent := self.parent_registers.get(register.name):
+            self.copy_change_to_parent(register, parent)
+
+    def copy_change_to_parent(self, child: Register, parent: Register):
+        """When a child register is overwritten, the change is copied over to its parent via this function."""
+        parent.write_at(parent.children[child.name], child.value, child.size)
+        if grandparent := self.parent_registers.get(parent.name):
+            self.copy_change_to_parent(parent, grandparent)
 
     def read_stack(self, no_bytes: int = 4):
         return self.memory.read(self.get_register("SP").value, no_bytes)
@@ -89,8 +99,6 @@ class Machine:
             length = 4 if suffix[1] == "W" else 1
             if suffix[0] == "R":
                 content = self.get_register(instruction[1]).bytes
-            elif suffix[0] == "A":
-                content = self.memory.read(instruction[1], length)
             else:
                 content = instruction[1:1+length]
             self.write_to_register("SP", self.get_register("SP").value - length)
@@ -101,18 +109,41 @@ class Machine:
             self.write_to_register(instruction[1], self.read_stack(length))
             self.write_to_register("SP", self.get_register("SP").value + length)
 
+        elif core == "MOV":
+            length = 4 if suffix[2] == "W" else 1
+            if suffix[0] == "R":
+                content = self.get_register(instruction[1]).bytes
+                arg2pos = 2
+            elif suffix[0] == "A":
+                content = self.memory.read(self.get_register(instruction[1]).bytes, length)
+                arg2pos = 2
+            elif suffix[0] == "M":
+                content = self.memory.read(instruction[1:3], length)
+                arg2pos = 3
+            else:
+                content = instruction[1:1+length]
+                arg2pos = 1 + length
+
+            if suffix[1] == "R":
+                self.write_to_register(instruction[arg2pos], content)
+            elif suffix[1] == "A":
+                self.memory.write_at(self.get_register(instruction[arg2pos]).value, content, length)
+            else:
+                self.memory.write_at(instruction[arg2pos:arg2pos+2], content, length)
+
     def run(self, address: int):
         """Runs a program starting at the given memory address."""
         self.write_to_register("IP", address)
-        # print(f"Initial state:\n{self.state_map}")
+        print(f"Initial state:\n{self.state_map}")
         while True:
             instruction_pointer = self.get_register("IP").value
             next_instruction = self.memory.read(instruction_pointer, 16)
-            # print(f"Instruction: {next_instruction.hex}\n")
+            print(f"Instruction {self.operation_counter}: {next_instruction.hex}\n")
             if next_instruction.mnemonic == "HLT":
                 break
             else:
                 self.execute_instruction(next_instruction)
             self.write_to_register("IP", instruction_pointer + opcodes[next_instruction.mnemonic]["arg_bytes"] + 1)
-            # print(f"After instruction {self.operation_counter}:\n{self.state_map}")
+            print(self.state_map)
             self.operation_counter += 1
+        print("System halted.")

@@ -2,131 +2,305 @@
     {
         "code": 0,
         "mnemonic": "NOP",
-        "arg_bytes": 0
+        "args": []
     },
     {
         "code": 15,
         "mnemonic": "HLT",
-        "arg_bytes": 0
+        "args": []
     },
     {
         "code": 64,
         "mnemonic": "PUSH-RB",
-        "arg_bytes": 1
+        "args": [
+            {
+                "type": "breg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 65,
         "mnemonic": "PUSH-LB",
-        "arg_bytes": 1
+        "args": [
+            {
+                "type": "blit",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 72,
         "mnemonic": "PUSH-RW",
-        "arg_bytes": 1
+        "args": [
+            {
+                "type": "wreg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 73,
         "mnemonic": "PUSH-LW",
-        "arg_bytes": 4
+        "args": [
+            {
+                "type": "wlit",
+                "bytes": 4
+            }
+        ]
     },
     {
         "code": 80,
         "mnemonic": "POP-B",
-        "arg_bytes": 1
+        "args": [
+            {
+                "type": "breg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 88,
         "mnemonic": "POP-W",
-        "arg_bytes": 1
+        "args": [
+            {
+                "type": "wreg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 96,
         "mnemonic": "MOV-RRB",
-        "arg_bytes": 2
+        "args": [
+            {
+                "type": "breg",
+                "bytes": 1
+            },
+            {
+                "type": "breg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 97,
         "mnemonic": "MOV-ARB",
-        "arg_bytes": 2
+        "args": [
+            {
+                "type": "wreg",
+                "bytes": 1
+            },
+            {
+                "type": "breg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 98,
         "mnemonic": "MOV-LRB",
-        "arg_bytes": 2
+        "args": [
+            {
+                "type": "blit",
+                "bytes": 1
+            },
+            {
+                "type": "breg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 99,
         "mnemonic": "MOV-RAB",
-        "arg_bytes": 2
+        "args": [
+            {
+                "type": "breg",
+                "bytes": 1
+            },
+            {
+                "type": "wreg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 100,
         "mnemonic": "MOV-LAB",
-        "arg_bytes": 2
+        "args": [
+            {
+                "type": "blit",
+                "bytes": 1
+            },
+            {
+                "type": "wreg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 101,
         "mnemonic": "MOV-RMB",
-        "arg_bytes": 3
+        "args": [
+            {
+                "type": "breg",
+                "bytes": 1
+            },
+            {
+                "type": "mem",
+                "bytes": 2
+            }
+        ]
     },
     {
         "code": 102,
         "mnemonic": "MOV-LMB",
-        "arg_bytes": 3
+        "args": [
+            {
+                "type": "blit",
+                "bytes": 1
+            },
+            {
+                "type": "mem",
+                "bytes": 2
+            }
+        ]
     },
     {
         "code": 103,
         "mnemonic": "MOV-MRB",
-        "arg_bytes": 3
+        "args": [
+            {
+                "type": "mem",
+                "bytes": 2
+            },
+            {
+                "type": "breg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 104,
         "mnemonic": "MOV-RRW",
-        "arg_bytes": 2
+        "args": [
+            {
+                "type": "wreg",
+                "bytes": 1
+            },
+            {
+                "type": "wreg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 105,
         "mnemonic": "MOV-ARW",
-        "arg_bytes": 2
+        "args": [
+            {
+                "type": "wreg",
+                "bytes": 1
+            },
+            {
+                "type": "wreg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 106,
         "mnemonic": "MOV-LRW",
-        "arg_bytes": 5
+        "args": [
+            {
+                "type": "wlit",
+                "bytes": 4
+            },
+            {
+                "type": "wreg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 107,
         "mnemonic": "MOV-RAW",
-        "arg_bytes": 2
+        "args": [
+            {
+                "type": "wreg",
+                "bytes": 1
+            },
+            {
+                "type": "wreg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 108,
         "mnemonic": "MOV-LAW",
-        "arg_bytes": 5
+        "args": [
+            {
+                "type": "wlit",
+                "bytes": 4
+            },
+            {
+                "type": "wreg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 109,
         "mnemonic": "MOV-RMW",
-        "arg_bytes": 3
+        "args": [
+            {
+                "type": "wreg",
+                "bytes": 1
+            },
+            {
+                "type": "mem",
+                "bytes": 2
+            }
+        ]
     },
     {
         "code": 110,
         "mnemonic": "MOV-LMW",
-        "arg_bytes": 6
+        "args": [
+            {
+                "type": "wlit",
+                "bytes": 4
+            },
+            {
+                "type": "mem",
+                "bytes": 2
+            }
+        ]
     },
     {
         "code": 111,
         "mnemonic": "MOV-MRW",
-        "arg_bytes": 3
+        "args": [
+            {
+                "type": "mem",
+                "bytes": 2
+            },
+            {
+                "type": "wreg",
+                "bytes": 1
+            }
+        ]
     },
     {
         "code": 192,
         "mnemonic": "IFZ",
-        "arg_bytes": 0
+        "args": []
     },
     {
         "code": 208,
         "mnemonic": "IFNZ",
-        "arg_bytes": 0
+        "args": []
     }
 ]

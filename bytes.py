@@ -3,8 +3,23 @@ import re
 from math import ceil
 
 
-_instruction_set = json.load(open("instructions.json"))
-opcodes = {g["code"]: g for g in _instruction_set}
+class Instruction:
+    def __init__(self, code: int, mnemonic: str, args: list[dict]):
+        self.code = code
+        self.mnemonic = mnemonic
+        self.args = args
+
+    @property
+    def arg_bytes(self) -> int:
+        return sum(g["bytes"] for g in self.args)
+
+    @staticmethod
+    def from_json(js: dict):
+        return Instruction(**js)
+
+
+instructions = json.load(open("instructions.json"))
+opcodes = {g.code: Instruction.from_json(g) for g in instructions}
 
 
 class BitError(ValueError):
@@ -57,7 +72,7 @@ class Byte:  # not a fan of the built-in binary classes
 
     @property
     def mnemonic(self) -> str:
-        return opcodes.get(self.value, {})["mnemonic"]
+        return opcodes.get(self.value, {}).mnemonic
 
     def __len__(self):
         return len(self.bits)

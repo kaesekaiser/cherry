@@ -17,6 +17,9 @@ class Instruction:
     def from_json(js: dict):
         return Instruction(**js)
 
+    def __bytes__(self):
+        return bytes([self.code])
+
 
 instructions = json.load(open("instructions.json"))
 opcodes = {g["code"]: Instruction.from_json(g) for g in instructions}
@@ -26,7 +29,7 @@ class BitError(ValueError):
     pass
 
 
-SupportsBitConversion = int | str | list[int]
+SupportsBitConversion = int | str | list[int] | bytes
 
 
 def zero_pad(ls: list, length: int):
@@ -51,6 +54,8 @@ def convert_to_bits(data: SupportsBitConversion, length: int = 8) -> list[int]:
         return zero_pad(data, length)
     elif isinstance(data, Byte):
         return zero_pad(data.bits, length)
+    elif isinstance(data, bytes):
+        return [j for g in list(data) for j in convert_to_bits(g)]
 
 
 class Byte:  # not a fan of the built-in binary classes
@@ -99,7 +104,7 @@ class Byte:  # not a fan of the built-in binary classes
         return self.__class__(data=self.bits[n:] + [0 for _ in range(n)], size=self.size)
 
     def __bytes__(self):
-        return bytes(self.value)
+        return bytes([self.value])
 
     @property
     def hex(self):
@@ -163,3 +168,6 @@ class ByteArray(Byte):
         if isinstance(item, slice):
             return ByteArray.from_list([j for g in self.bytes[item] for j in g.bits])
         return self.bytes[item]
+
+    def __bytes__(self):
+        return bytes([g.value for g in self.bytes])

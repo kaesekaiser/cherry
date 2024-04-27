@@ -10,6 +10,7 @@ class Register:
         self.bits = convert_to_bits(data, length=self.size * 8)
         self.children = dict(children)
         self.name = kwargs.get("name")
+        self.pointer = kwargs.get("pointer", 0)
 
     @property
     def bytes(self):
@@ -149,3 +150,14 @@ class Machine:
             print(self.state_map)
             self.operation_counter += 1
         print("System halted.")
+
+    def execute_file(self, path: str):
+        """Executes a raw bytecode file with the given path."""
+        with open(path, "rb") as fp:
+            # write file to memory in pages to prevent massive list or I/O operations
+            page = 0
+            page_length = 4096
+            while bts := fp.read(page_length):
+                self.memory.write_at(page * page_length, bts, page_length)
+                page += 1
+        self.run(0)

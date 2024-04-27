@@ -88,7 +88,7 @@
         "mnemonic": "MOV-ARB",
         "args": [
             {
-                "type": "wreg",
+                "type": "indr",
                 "bytes": 1
             },
             {
@@ -120,7 +120,7 @@
                 "bytes": 1
             },
             {
-                "type": "wreg",
+                "type": "indr",
                 "bytes": 1
             }
         ]
@@ -134,7 +134,7 @@
                 "bytes": 1
             },
             {
-                "type": "wreg",
+                "type": "indr",
                 "bytes": 1
             }
         ]
@@ -200,7 +200,7 @@
         "mnemonic": "MOV-ARW",
         "args": [
             {
-                "type": "wreg",
+                "type": "indr",
                 "bytes": 1
             },
             {
@@ -232,7 +232,7 @@
                 "bytes": 1
             },
             {
-                "type": "wreg",
+                "type": "indr",
                 "bytes": 1
             }
         ]
@@ -246,7 +246,7 @@
                 "bytes": 4
             },
             {
-                "type": "wreg",
+                "type": "indr",
                 "bytes": 1
             }
         ]

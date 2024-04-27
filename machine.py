@@ -1,6 +1,9 @@
 from bytes import *
 
 
+registers = json.load(open("registers.json"))
+
+
 class Register:
     def __init__(self, size: int, data: SupportsBitConversion | Byte = 0, children: dict[str, int] = (), **kwargs):
         self.size = size
@@ -42,7 +45,7 @@ class Register:
 
 
 class Drive(Register):
-    def read(self, address: int | ByteArray, no_bytes: int) -> Byte:
+    def read(self, address: int | ByteArray, no_bytes: int) -> ByteArray:
         if isinstance(address, ByteArray):
             address = address.value
         return ByteArray.from_list(self.bits[address*8:(address+no_bytes)*8])
@@ -50,10 +53,9 @@ class Drive(Register):
 
 class Machine:
     def __init__(self):
-        registers = json.load(open("registers.json"))
-        self.registers = {k: Register.from_json({"name": k, **v}) for k, v in registers.items()}
-        self.register_pointers = {v["pointer"]: k for k, v in registers.items()}
-        self.parent_registers = {j: g for g in self.registers.values() for j in g.children}
+        self.register_names = {g["name"]: Register.from_json(g) for g in registers}
+        self.register_pointers = {g["pointer"]: g["name"] for g in registers}
+        self.parent_registers = {j: g for g in self.register_names.values() for j in g.children}
         self.memory = Drive(65536)  # just implementing memory as a continuous linear address space w/o paging
         self.operation_counter = 0
 
@@ -66,7 +68,7 @@ class Machine:
     def get_register(self, code: str | int | Byte) -> Register:
         if isinstance(code, Byte):
             code = code.value
-        return self.registers[self.register_pointers.get(code, code)]
+        return self.register_names[self.register_pointers.get(code, code)]
 
     def write_to_register(self, pointer: str | int | Byte, data: SupportsBitConversion | Byte):
         if isinstance(pointer, Byte):

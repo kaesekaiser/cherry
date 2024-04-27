@@ -1,48 +1,57 @@
-{
-    "AG": {
-        "size": 4,
+[
+    {
         "pointer": 0,
+        "name": "AG",
+        "size": 4,
         "children": {
             "AL": 0
         }
     },
-    "AL": {
-        "size": 1,
-        "pointer": 1
+    {
+        "pointer": 1,
+        "name": "AL",
+        "size": 1
     },
-    "BG": {
-        "size": 4,
+    {
         "pointer": 4,
+        "name": "BG",
+        "size": 4,
         "children": {
             "BL": 0
         }
     },
-    "BL": {
-        "size": 1,
-        "pointer": 5
+    {
+        "pointer": 5,
+        "name": "BL",
+        "size": 1
     },
-    "CG": {
-        "size": 4,
+    {
         "pointer": 8,
+        "name": "CG",
+        "size": 4,
         "children": {
             "CL": 0
         }
     },
-    "CL": {
-        "size": 1,
-        "pointer": 9
+    {
+        "pointer": 9,
+        "name": "CL",
+        "size": 1
     },
-    "IP": {
-        "size": 2,
-        "pointer": 128
+    {
+        "pointer": 128,
+        "name": "IP",
+        "size": 2
     },
-    "SP": {
-        "size": 2,
+    {
         "pointer": 160,
+        "name": "SP",
+        "size": 2,
         "data": "11110000 00000000"
     },
-    "FL": {
-        "size": 1,
-        "pointer": 192
-    }    
-}
+    {
+        "pointer": 192,
+        "name": "FL",
+        "size": 1
+    }
+]

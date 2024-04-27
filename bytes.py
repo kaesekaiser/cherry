@@ -19,7 +19,7 @@ class Instruction:
 
 
 instructions = json.load(open("instructions.json"))
-opcodes = {g.code: Instruction.from_json(g) for g in instructions}
+opcodes = {g["code"]: Instruction.from_json(g) for g in instructions}
 
 
 class BitError(ValueError):

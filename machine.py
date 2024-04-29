@@ -5,9 +5,6 @@ class OpcodeError(ValueError):
     pass
 
 
-registers = json.load(open("registers.json"))
-
-
 class Register:
     def __init__(self, size: int, data: SupportsBitConversion | Byte = 0, children: dict[str, int] = (), **kwargs):
         self.size = size
@@ -53,6 +50,10 @@ class Register:
             del self.bits[self.size*8:]
 
 
+registers = json.load(open("registers.json"))
+register_pointers = {g["pointer"]: Register.from_json(g) for g in registers}
+
+
 class Drive(Register):
     def read(self, address: int | ByteArray, no_bytes: int) -> ByteArray:
         if isinstance(address, ByteArray):
@@ -74,7 +75,7 @@ class Machine:
         return f"  [GA] {self.get_register('GA').hex}    [IP] {self.get_register('IP').hex}\n" \
                f"  [GB] {self.get_register('GB').hex}    [SP] {self.get_register('SP').hex}\n" \
                f"  [GC] {self.get_register('GC').hex}    [FL] {self.get_register('FL')}\n" \
-               f"  [GD] {self.get_register('GD').hex}\n"
+               f"  [GD] {self.get_register('GD').hex}         ------CZ\n"
 
     def get_register(self, code: str | int | Byte) -> Register:
         if isinstance(code, Byte):
@@ -190,11 +191,10 @@ class Machine:
 
                 self.write_op_add(instruction[1], "s", content)
 
-
     def run(self, address: int):
         """Runs a program starting at the given memory address."""
         self.write_to_register("IP", address)
-        print(f"Initial state:\n{self.state_map}")
+        print(f"Initial state:\n\n{self.state_map}")
         while True:
             next_instruction = self.memory.read(self.instruction_pointer, 16)
             print(f"Instruction {self.operation_counter}: {next_instruction.hex}\n")

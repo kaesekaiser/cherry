@@ -14,7 +14,7 @@
         "mnemonic": "PUSH-RB",
         "args": [
             {
-                "type": "breg",
+                "type": "reg",
                 "bytes": 1
             }
         ]
@@ -24,7 +24,7 @@
         "mnemonic": "PUSH-LB",
         "args": [
             {
-                "type": "blit",
+                "type": "lit",
                 "bytes": 1
             }
         ]
@@ -34,7 +34,7 @@
         "mnemonic": "PUSH-RW",
         "args": [
             {
-                "type": "wreg",
+                "type": "reg",
                 "bytes": 1
             }
         ]
@@ -44,7 +44,7 @@
         "mnemonic": "PUSH-LW",
         "args": [
             {
-                "type": "wlit",
+                "type": "lit",
                 "bytes": 4
             }
         ]
@@ -54,7 +54,7 @@
         "mnemonic": "POP-B",
         "args": [
             {
-                "type": "breg",
+                "type": "reg",
                 "bytes": 1
             }
         ]
@@ -64,7 +64,7 @@
         "mnemonic": "POP-W",
         "args": [
             {
-                "type": "wreg",
+                "type": "reg",
                 "bytes": 1
             }
         ]
@@ -84,11 +84,11 @@
         "mnemonic": "MOV-LITINDB",
         "args": [
             {
-                "type": "blit",
+                "type": "lit",
                 "bytes": 1
             },
             {
-                "type": "wreg",
+                "type": "reg",
                 "bytes": 1
             }
         ]
@@ -98,7 +98,7 @@
         "mnemonic": "MOV-LITMEMB",
         "args": [
             {
-                "type": "blit",
+                "type": "lit",
                 "bytes": 1
             },
             {
@@ -122,11 +122,11 @@
         "mnemonic": "MOV-LITINDW",
         "args": [
             {
-                "type": "wlit",
+                "type": "lit",
                 "bytes": 4
             },
             {
-                "type": "wreg",
+                "type": "reg",
                 "bytes": 1
             }
         ]
@@ -136,7 +136,159 @@
         "mnemonic": "MOV-LITMEMW",
         "args": [
             {
-                "type": "wlit",
+                "type": "lit",
+                "bytes": 4
+            },
+            {
+                "type": "mem",
+                "bytes": 2
+            }
+        ]
+    },
+    {
+        "code": 112,
+        "mnemonic": "ADD-B",
+        "args": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ]
+    },
+    {
+        "code": 113,
+        "mnemonic": "ADD-LITINDB",
+        "args": [
+            {
+                "type": "lit",
+                "bytes": 1
+            },
+            {
+                "type": "reg",
+                "bytes": 1
+            }
+        ]
+    },
+    {
+        "code": 114,
+        "mnemonic": "ADD-LITMEMB",
+        "args": [
+            {
+                "type": "lit",
+                "bytes": 1
+            },
+            {
+                "type": "mem",
+                "bytes": 2
+            }
+        ]
+    },
+    {
+        "code": 116,
+        "mnemonic": "ADD-W",
+        "args": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ]
+    },
+    {
+        "code": 117,
+        "mnemonic": "ADD-LITINDW",
+        "args": [
+            {
+                "type": "lit",
+                "bytes": 4
+            },
+            {
+                "type": "reg",
+                "bytes": 1
+            }
+        ]
+    },
+    {
+        "code": 118,
+        "mnemonic": "ADD-LITMEMW",
+        "args": [
+            {
+                "type": "lit",
+                "bytes": 4
+            },
+            {
+                "type": "mem",
+                "bytes": 2
+            }
+        ]
+    },
+    {
+        "code": 128,
+        "mnemonic": "SUB-B",
+        "args": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ]
+    },
+    {
+        "code": 129,
+        "mnemonic": "SUB-LITINDB",
+        "args": [
+            {
+                "type": "lit",
+                "bytes": 1
+            },
+            {
+                "type": "reg",
+                "bytes": 1
+            }
+        ]
+    },
+    {
+        "code": 130,
+        "mnemonic": "SUB-LITMEMB",
+        "args": [
+            {
+                "type": "lit",
+                "bytes": 1
+            },
+            {
+                "type": "mem",
+                "bytes": 2
+            }
+        ]
+    },
+    {
+        "code": 132,
+        "mnemonic": "SUB-W",
+        "args": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ]
+    },
+    {
+        "code": 133,
+        "mnemonic": "SUB-LITINDW",
+        "args": [
+            {
+                "type": "lit",
+                "bytes": 4
+            },
+            {
+                "type": "reg",
+                "bytes": 1
+            }
+        ]
+    },
+    {
+        "code": 134,
+        "mnemonic": "SUB-LITMEMW",
+        "args": [
+            {
+                "type": "lit",
                 "bytes": 4
             },
             {

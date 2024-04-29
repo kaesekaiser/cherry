@@ -6,12 +6,25 @@ class CherrySyntaxError(SyntaxError):
 
 
 class Argument:
-    def __init__(self, arg_type: str, value: int):
+    def __init__(self, arg_type: str, value: int, **kwargs):
         self.type = arg_type
         self.value = value
+        self.lit_size = kwargs.pop("lit_size", 1)
 
     def __len__(self):
-        return 4 if self.type in ("wlit", ) else 2 if self.type in ("mem", ) else 1
+        if self.type == "lit":
+            return self.lit_size
+        else:
+            return 2 if self.type in ("mem", ) else 1
+
+    @property
+    def size(self) -> int:
+        if self.type == "lit":
+            return self.lit_size
+        elif self.type == "reg":
+            return register_pointers[self.value].size
+        else:
+            return 0  # no inherent size, effectively just False
 
     def __str__(self):
         return f"Type: {self.type} / Value: {self.value} / Bytes: {bytes(self).hex(sep=' ').upper()}"
@@ -66,17 +79,16 @@ class Assembler:
         Throws a CherrySyntaxError if the argument is invalid, and thus doubles as an argument validator."""
 
         if argument.upper() in self.register_names:
-            reg = self.register_names[argument.upper()]
-            return Argument(f"{'w' if reg.size == 4 else 'b'}reg", reg.pointer)
+            return Argument(f"reg", self.register_names[argument.upper()].pointer)
 
         elif re.match(r"[bB]", argument):
             if not self.is_valid_byte_literal(argument):
                 raise CherrySyntaxError(f"Invalid byte literal {self.on_line_x}: {argument}")
             bts = re.findall(r"[01]{8}(?=(_?[01]{8})*$)", argument)
             if len(bts) == 1:
-                return Argument("blit", int(argument[1:], 2))
+                return Argument("lit", int(argument[1:], 2), lit_size=1)
             elif len(bts) == 4:
-                return Argument("wlit", int("".join(g for g in argument[1:].split("_")[::-1]), 2))
+                return Argument("lit", int("".join(g for g in argument[1:].split("_")[::-1]), 2), lit_size=4)
             else:
                 raise CherrySyntaxError(f"Invalid literal length {self.on_line_x}: {argument}")
 
@@ -85,9 +97,9 @@ class Assembler:
                 raise CherrySyntaxError(f"Invalid decimal integer {self.on_line_x}: {argument}")
             bts = self.read_dec_literal_length(argument)
             if bts == 1:
-                return Argument("blit", int(re.sub(r"[^0-9]", "", argument.split(":")[0])))
+                return Argument("lit", int(re.sub(r"[^0-9]", "", argument.split(":")[0])), lit_size=1)
             elif bts == 4:
-                return Argument("wlit", int(re.sub(r"[^0-9]", "", argument.split(":")[0])))
+                return Argument("lit", int(re.sub(r"[^0-9]", "", argument.split(":")[0])), lit_size=4)
             else:
                 raise CherrySyntaxError(f"Invalid literal length {self.on_line_x}: {argument}")
 
@@ -96,9 +108,9 @@ class Assembler:
                 raise CherrySyntaxError(f"Invalid hex literal {self.on_line_x}: {argument}")
             bts = re.findall(r"(?i)[a-f0-9]{2}(?=(_?[a-f0-9]{2})*$)", argument)
             if len(bts) == 1:
-                return Argument("blit", int(argument[1:], 16))
+                return Argument("lit", int(argument[1:], 16), lit_size=1)
             elif len(bts) == 4:
-                return Argument("wlit", int("".join(g for g in argument[1:].split("_")[::-1]), 16))
+                return Argument("lit", int("".join(g for g in argument[1:].split("_")[::-1]), 16), lit_size=4)
             else:
                 raise CherrySyntaxError(f"Invalid literal length {self.on_line_x}: {argument}")
 
@@ -135,7 +147,29 @@ class Assembler:
             ret[6:8] = [1, 1]
         return bytes(Byte(ret))
 
+    def common_two_arg_suffix(self, arg1: Argument, arg2: Argument) -> bool:
+        """Gets the mnemonic suffix for common two-arg instructions like MOV and ADD, given their args."""
+        valid_pairings = {
+            "reg": ("reg", "indr", "mem"),
+            "indr": ("reg", ),
+            "lit": ("reg", "indr", "mem"),
+            "mem": ("reg", )
+        }
+        if arg2.type not in valid_pairings[arg1.type]:
+            raise CherrySyntaxError(
+                f"Invalid argument type {self.on_line_x}: "
+                f"{arg1.type} must be paired with {', '.join(valid_pairings[arg1.type])}"
+            )
+        if arg2.type == "reg" and arg1.size != 0 and arg1.size != arg2.size:
+            print(f"Mismatched argument sizes {self.on_line_x}. This is legal, but may cause unexpected behavior.")
+
+        if arg1.type == "lit" and arg2.type != "reg":
+            return f"LIT{'IND' if arg2.type == 'indr' else 'MEM'}{'W' if arg1.size == 4 else 'B'}"
+        operand_size = arg1.size if arg1.size else arg2.size
+        return "W" if operand_size == 4 else "B"
+
     def assemble_instruction(self, raw_instruction: str) -> bytes:
+        """Assembles one line of a file into bytecode."""
         s = raw_instruction.split("%")[0].strip()  # remove comments and trailing spaces
         if not (mnemonic := re.match(r"(?i)[A-Z\-]+( +|$)", s)):
             raise CherrySyntaxError(f"No mnemonic {self.on_line_x}: {raw_instruction}")
@@ -170,36 +204,13 @@ class Assembler:
                 opcode = self.mnemonics[f"{mnemonic}-{args[0].type[0].upper()}"].code
 
             elif mnemonic == "MOV":
-                if args[1].type in ("indr", "mem"):
-                    operand_size = args[0].type[0].upper()
-                    if args[0].type not in ("blit", "breg", "wlit", "wreg"):
-                        raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[0]}")
-                    if args[0].type.endswith("lit"):
-                        operand_size = args[0].type[0].upper()
-                        givens += bytes(ByteArray(size=len(args[0]), data=args[0].value))
-                        if args[1].type == "indr":
-                            opcode = self.mnemonics[f"{mnemonic}-LITIND{operand_size}"].code
-                        else:
-                            opcode = self.mnemonics[f"{mnemonic}-LITMEM{operand_size}"].code
-                            givens += bytes(ByteArray(size=2, data=args[1].value))
-                    else:
-                        opcode = self.mnemonics[f"{mnemonic}-{operand_size}"].code
-                        op_add = self.assemble_op_add(*args)
-                elif args[1].type.endswith("reg"):
-                    operand_size = args[1].type[0].upper()
-                    if args[0].type.endswith("lit"):
-                        if args[0].type == "wlit" and args[1].type == "breg":
-                            raise CherrySyntaxError(f"Mismatched argument length {self.on_line_x}: {raw_instruction}")
-                        operand_size = args[0].type[0].upper()
-                        givens += bytes(ByteArray(size=len(args[0]), data=args[0].value))
-                    elif args[0].type == "mem":
-                        givens += bytes(ByteArray(size=2, data=args[0].value))
-                    elif args[0].type not in (f"breg", "wreg", "indr"):
-                        raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[0]}")
-                    opcode = self.mnemonics[f"{mnemonic}-{operand_size}"].code
+                suffix = self.common_two_arg_suffix(*args)
+                opcode = self.mnemonics[f"{mnemonic}-{suffix}"].code
+                for arg in args:
+                    if arg.type in ("lit", "mem") or (arg.type == "indr" and suffix not in ("B", "W")):
+                        givens += bytes(arg)
+                if suffix in ("B", "W"):
                     op_add = self.assemble_op_add(*args)
-                else:
-                    raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[1]}")
 
         else:  # fallback
             opcode = self.mnemonics[mnemonic].code

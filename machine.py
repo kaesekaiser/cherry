@@ -1,6 +1,10 @@
 from bytes import *
 
 
+class OpcodeError(ValueError):
+    pass
+
+
 registers = json.load(open("registers.json"))
 
 
@@ -37,9 +41,13 @@ class Register:
     def write(self, data: SupportsBitConversion | Byte):
         self.bits = convert_to_bits(data, length=self.size * 8)
 
-    def write_at(self, address: int | ByteArray, data: SupportsBitConversion | Byte, no_bytes: int):
+    def write_at(self, address: int | ByteArray, data: SupportsBitConversion | Byte, no_bytes: int = 0):
         if isinstance(address, ByteArray):
             address = address.value
+        if isinstance(data, ByteArray):
+            no_bytes = len(data)
+        elif not no_bytes:
+            raise ValueError("Must specify the number of bytes to write non-ByteArray objects to registers.")
         self.bits[address*8:(address+no_bytes)*8] = convert_to_bits(data, no_bytes * 8)
         if address + no_bytes > self.size:
             del self.bits[self.size*8:]
@@ -49,9 +57,10 @@ class Drive(Register):
     def read(self, address: int | ByteArray, no_bytes: int) -> ByteArray:
         if isinstance(address, ByteArray):
             address = address.value
-        return ByteArray.from_list(self.bits[address*8:(address+no_bytes)*8])
+        return ByteArray.from_bits(self.bits[address * 8:(address + no_bytes) * 8])
 
 
+# noinspection PyTupleAssignmentBalance
 class Machine:
     def __init__(self):
         self.register_names = {g["name"]: Register.from_json(g) for g in registers}
@@ -62,18 +71,21 @@ class Machine:
 
     @property
     def state_map(self):
-        return f"  [AG] {self.get_register('AG').hex}    [IP] {self.get_register('IP').hex}\n" \
-               f"  [BG] {self.get_register('BG').hex}    [SP] {self.get_register('SP').hex}\n" \
-               f"  [CG] {self.get_register('CG').hex}    [FL] {self.get_register('FL')}\n"
+        return f"  [GA] {self.get_register('GA').hex}    [IP] {self.get_register('IP').hex}\n" \
+               f"  [GB] {self.get_register('GB').hex}    [SP] {self.get_register('SP').hex}\n" \
+               f"  [GC] {self.get_register('GC').hex}    [FL] {self.get_register('FL')}\n" \
+               f"  [GD] {self.get_register('GD').hex}\n"
 
     def get_register(self, code: str | int | Byte) -> Register:
         if isinstance(code, Byte):
             code = code.value
         return self.register_names[self.register_pointers.get(code, code)]
 
+    @property
+    def instruction_pointer(self):
+        return self.get_register("IP").value
+
     def write_to_register(self, pointer: str | int | Byte, data: SupportsBitConversion | Byte):
-        if isinstance(pointer, Byte):
-            pointer = pointer.value
         (register := self.get_register(pointer)).write(data)
         for k, v in register.children.items():
             self.get_register(k).write(register.bytes[v:])
@@ -86,14 +98,60 @@ class Machine:
         if grandparent := self.parent_registers.get(parent.name):
             self.copy_change_to_parent(parent, grandparent)
 
+    def increment_reg(self, pointer: str | int | Byte, n: int = 1):
+        self.write_to_register(pointer, self.get_register(pointer).value + n)
+
     def read_stack(self, no_bytes: int = 4):
         return self.memory.read(self.get_register("SP").value, no_bytes)
+
+    @property
+    def op_add_register_codes(self):
+        return "GA", "GB", "GC", "GD", None, None, None, None  # these will be set once i have more registers
+
+    def op_add_primary(self, op_add: Byte) -> tuple[str]:
+        if op_add.substring[6:8] == 3:
+            return "special", ("none", "given_literal", None, None, "given_address", None, None, None)[op_add.substring[3:6]]
+        elif op_add.substring[6:8] == 1:
+            return "memory", self.get_register(self.op_add_register_codes[op_add.substring[3:6]]).value
+        else:
+            return "register", self.op_add_register_codes[op_add.substring[3:6]]
+
+    def op_add_secondary(self, op_add: Byte) -> tuple[str]:
+        if op_add.substring[6:8] == 2:
+            return "memory", self.get_register(self.op_add_register_codes[op_add.substring[0:3]]).value
+        else:
+            return "register", self.op_add_register_codes[op_add.substring[0:3]]
+
+    def read_op_add(self, op_add: Byte, which: str, operand_size: int) -> Byte | ByteArray:
+        if which == "s":
+            src_type, src_value = self.op_add_secondary(op_add)
+        else:  # which == "p"
+            src_type, src_value = self.op_add_primary(op_add)
+            if src_type == "special":
+                raise ValueError("Cannot read special operands with read_op_add().")
+        if src_type == "register":
+            return self.get_register(src_value).bytes[:operand_size]
+        elif src_type == "memory":
+            return self.memory.read(src_value, operand_size)
+
+    def write_op_add(self, op_add: Byte, which: str, data: ByteArray):
+        if which == "s":
+            dest_type, dest_value = self.op_add_secondary(op_add)
+        else:  # which == "p"
+            dest_type, dest_value = self.op_add_primary(op_add)
+            if dest_type == "special":
+                raise ValueError("Cannot write to special operands with write_op_add().")
+        if dest_type == "register":
+            self.write_to_register(dest_value, data)
+        elif dest_type == "memory":
+            self.memory.write_at(dest_value, data)
 
     def execute_instruction(self, instruction: ByteArray):
         """Executes the instruction written into the given ByteArray.
 
         This function is an extreme abstraction of the process, obviously."""
 
+        operation = instruction[0]
         mnemonic = instruction.mnemonic
         core = mnemonic.split("-")[0]
         suffix = mnemonic.split("-")[1] if "-" in mnemonic else ""
@@ -113,40 +171,38 @@ class Machine:
             self.write_to_register("SP", self.get_register("SP").value + length)
 
         elif core == "MOV":
-            length = 4 if suffix[2] == "W" else 1
-            if suffix[0] == "R":
-                content = self.get_register(instruction[1]).bytes
-                arg2pos = 2
-            elif suffix[0] == "A":
-                content = self.memory.read(self.get_register(instruction[1]).bytes, length)
-                arg2pos = 2
-            elif suffix[0] == "M":
-                content = self.memory.read(instruction[1:3], length)
-                arg2pos = 3
-            else:
-                content = instruction[1:1+length]
-                arg2pos = 1 + length
+            operand_size = 4 if operation[2] else 1
+            if operation.substring[0:2] == 0:
+                op_type, op_value = self.op_add_primary(instruction[1])
+                if op_type == "special":  # op_type == "special"
+                    if op_value == "none":
+                        content = ByteArray(operand_size, 0)
+                    elif op_value == "given_literal":
+                        self.increment_reg("IP", operand_size)
+                        content = instruction[2:2 + operand_size]
+                    elif op_value == "given_address":
+                        self.increment_reg("IP", 2)
+                        content = self.memory.read(instruction[2:4].value, operand_size)
+                    else:  # in effect would do nothing but should be avoided
+                        raise OpcodeError(f"Bad op-add byte encountered at position {self.instruction_pointer+1}.")
+                else:
+                    content = self.read_op_add(instruction[1], "p", operand_size)
 
-            if suffix[1] == "R":
-                self.write_to_register(instruction[arg2pos], content)
-            elif suffix[1] == "A":
-                self.memory.write_at(self.get_register(instruction[arg2pos]).value, content, length)
-            else:
-                self.memory.write_at(instruction[arg2pos:arg2pos+2], content, length)
+                self.write_op_add(instruction[1], "s", content)
+
 
     def run(self, address: int):
         """Runs a program starting at the given memory address."""
         self.write_to_register("IP", address)
         print(f"Initial state:\n{self.state_map}")
         while True:
-            instruction_pointer = self.get_register("IP").value
-            next_instruction = self.memory.read(instruction_pointer, 16)
+            next_instruction = self.memory.read(self.instruction_pointer, 16)
             print(f"Instruction {self.operation_counter}: {next_instruction.hex}\n")
             if next_instruction.mnemonic == "HLT":
                 break
             else:
                 self.execute_instruction(next_instruction)
-            self.write_to_register("IP", instruction_pointer + opcodes[next_instruction.opcode].arg_bytes + 1)
+            self.increment_reg("IP", opcodes[next_instruction.opcode].base_length)
             print(self.state_map)
             self.operation_counter += 1
         print("System halted.")

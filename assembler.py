@@ -1,4 +1,3 @@
-import re
 from machine import *
 
 
@@ -121,6 +120,21 @@ class Assembler:
         else:
             raise CherrySyntaxError(f"Invalid argument {self.on_line_x}: {argument}")
 
+    @staticmethod
+    def assemble_op_add(primary: Argument, secondary: Argument) -> bytes:
+        ret = [0 for _ in range(8)]
+        ret[0:3] = convert_to_bits(secondary.value, 3)  # converting register pointer to bits
+        if primary.type.endswith("reg") or primary.type == "indr":
+            ret[3:6] = convert_to_bits(primary.value, 3)
+            ret[6:8] = [int(primary.type == "indr"), int(secondary.type == "indr")]
+        else:
+            if primary.type.endswith("lit"):
+                ret[3:6] = [1, 0, 0]
+            elif primary.type == "mem":
+                ret[3:6] = [0, 0, 1]
+            ret[6:8] = [1, 1]
+        return bytes(Byte(ret))
+
     def assemble_instruction(self, raw_instruction: str) -> bytes:
         s = raw_instruction.split("%")[0].strip()  # remove comments and trailing spaces
         if not (mnemonic := re.match(r"(?i)[A-Z\-]+( +|$)", s)):
@@ -139,35 +153,59 @@ class Assembler:
             raise CherrySyntaxError(f"{mnemonic} expected {correct_arg_count} arguments and got {len(raw_args)} "
                                     f"{self.on_line_x}: {raw_instruction}")
 
+        opcode = 0
         args = [self.interpret_argument(g) for g in raw_args]
+        op_add = bytearray([])
+        givens = bytearray([])
 
         if mnemonic in self.vague_mnemonics:
             if mnemonic == "PUSH":
                 if args[0].type not in ("blit", "breg", "wlit", "wreg"):
                     raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[0]}")
-                mnemonic += f"-{args[0].type[1].upper()}{args[0].type[0].upper()}"
+                opcode = self.mnemonics[f"{mnemonic}-{args[0].type[1].upper()}{args[0].type[0].upper()}"].code
 
             elif mnemonic == "POP":
                 if args[0].type not in ("breg", "wreg"):
                     raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[0]}")
-                mnemonic += f"-{args[0].type[0].upper()}"
+                opcode = self.mnemonics[f"{mnemonic}-{args[0].type[0].upper()}"].code
 
             elif mnemonic == "MOV":
                 if args[1].type in ("indr", "mem"):
+                    operand_size = args[0].type[0].upper()
                     if args[0].type not in ("blit", "breg", "wlit", "wreg"):
                         raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[0]}")
-                    mnemonic += f"-{args[0].type[1].upper()}{'M'}" \
-                                f"{args[0].type[0].upper()}"
-                elif args[1].type in ("breg", "wreg"):
-                    if args[0].type not in (f"{args[1].type[0]}lit", f"{args[1].type[0]}reg", "indr", "mem"):
+                    if args[0].type.endswith("lit"):
+                        operand_size = args[0].type[0].upper()
+                        givens += bytes(ByteArray(size=len(args[0]), data=args[0].value))
+                        if args[1].type == "indr":
+                            opcode = self.mnemonics[f"{mnemonic}-LITIND{operand_size}"].code
+                        else:
+                            opcode = self.mnemonics[f"{mnemonic}-LITMEM{operand_size}"].code
+                            givens += bytes(ByteArray(size=2, data=args[1].value))
+                    else:
+                        opcode = self.mnemonics[f"{mnemonic}-{operand_size}"].code
+                        op_add = self.assemble_op_add(*args)
+                elif args[1].type.endswith("reg"):
+                    operand_size = args[1].type[0].upper()
+                    if args[0].type.endswith("lit"):
+                        if args[0].type == "wlit" and args[1].type == "breg":
+                            raise CherrySyntaxError(f"Mismatched argument length {self.on_line_x}: {raw_instruction}")
+                        operand_size = args[0].type[0].upper()
+                        givens += bytes(ByteArray(size=len(args[0]), data=args[0].value))
+                    elif args[0].type == "mem":
+                        givens += bytes(ByteArray(size=2, data=args[0].value))
+                    elif args[0].type not in (f"breg", "wreg", "indr"):
                         raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[0]}")
-                    mnemonic += f"-{'A' if args[0].type == 'indr' else args[0].type[-3].upper()}" \
-                                f"R{args[1].type[0].upper()}"
+                    opcode = self.mnemonics[f"{mnemonic}-{operand_size}"].code
+                    op_add = self.assemble_op_add(*args)
                 else:
                     raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[1]}")
 
-        instruction = self.mnemonics[mnemonic]
-        return bytes([instruction.code, *[j for g in args for j in list(bytes(g))]])
+        else:  # fallback
+            opcode = self.mnemonics[mnemonic].code
+
+        instruction = bytearray([opcode])
+        return instruction + op_add + givens
 
     def assemble_file(self, source_path: str, destination_path: str, mode: str = "b"):
         open(destination_path, "w")  # clear output file if it exists

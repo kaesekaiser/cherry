@@ -10,8 +10,8 @@ class Instruction:
         self.args = args
 
     @property
-    def arg_bytes(self) -> int:
-        return sum(g["bytes"] for g in self.args)
+    def base_length(self) -> int:
+        return 1 + sum(g["bytes"] for g in self.args)
 
     @staticmethod
     def from_json(js: dict):
@@ -64,7 +64,7 @@ class Byte:  # not a fan of the built-in binary classes
         self.bits = convert_to_bits(data, length=self.size)
 
     @staticmethod
-    def from_list(ls: list[int]):
+    def from_bits(ls: list[int]):
         return Byte(data=ls, size=len(ls))
 
     @property
@@ -77,7 +77,9 @@ class Byte:  # not a fan of the built-in binary classes
 
     @property
     def mnemonic(self) -> str:
-        return opcodes.get(self.value, {}).mnemonic
+        if self.value in opcodes:
+            return opcodes[self.value].mnemonic
+        return "NOP"
 
     def __len__(self):
         return len(self.bits)
@@ -115,13 +117,12 @@ class Byte:  # not a fan of the built-in binary classes
 
     def __getitem__(self, item: int | slice):
         if isinstance(item, slice):
-            return Byte.from_list(self.bits[item])
+            return Byte.from_bits(self.bits[item])
         return self.bits[item]
 
     def __setitem__(self, key, value):
         if isinstance(key, slice):
             data = convert_to_bits(value, length=len(self.bits[key]))
-            print(len(self.bits[key]), data)
             self.bits[key] = data
         elif isinstance(key, int):
             if value != 0 and value != 1:
@@ -131,6 +132,21 @@ class Byte:  # not a fan of the built-in binary classes
     def flip(self, index: int):
         self.bits[index] = int(not self.bits[index])
 
+    @property
+    def substring(self):
+        return SubValue(self.bits, self.size)
+
+
+class SubValue:
+    def __init__(self, data: SupportsBitConversion, size: int):
+        self.bits = convert_to_bits(data, length=size)
+
+    def __getitem__(self, item) -> int:
+        if isinstance(item, slice):
+            return int("".join(str(g) for g in self.bits[item].__reversed__()), 2)
+        elif isinstance(item, int):
+            return self.bits[item]
+
 
 class ByteArray(Byte):
     def __init__(self, size: int, data: SupportsBitConversion = 0):
@@ -139,10 +155,10 @@ class ByteArray(Byte):
 
     @staticmethod
     def from_bytes(bts: list[Byte]):
-        return ByteArray(len(bts), [j for g in bts for j in g.bits])
+        return ByteArray(size=len(bts), data=[j for g in bts for j in g.bits])
 
     @staticmethod
-    def from_list(ls: list[int]):
+    def from_bits(ls: list[int]):
         return ByteArray(data=ls, size=ceil(len(ls) / 8))
 
     @property
@@ -166,8 +182,11 @@ class ByteArray(Byte):
 
     def __getitem__(self, item) -> Byte:
         if isinstance(item, slice):
-            return ByteArray.from_list([j for g in self.bytes[item] for j in g.bits])
+            return ByteArray.from_bits([j for g in self.bytes[item] for j in g.bits])
         return self.bytes[item]
 
     def __bytes__(self):
         return bytes([g.value for g in self.bytes])
+
+    def __len__(self):
+        return len(self.bits) // 8

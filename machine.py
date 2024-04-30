@@ -63,6 +63,9 @@ class Drive(Register):
 
 # noinspection PyTupleAssignmentBalance
 class Machine:
+    flag_names = {"Z": 0, "C": 1, "N": 2}
+    op_add_register_codes = "GA", "GB", "GC", "GD", None, None, None, None  # these will be set later
+
     def __init__(self):
         self.register_names = {g["name"]: Register.from_json(g) for g in registers}
         self.register_pointers = {g["pointer"]: g["name"] for g in registers}
@@ -105,9 +108,11 @@ class Machine:
     def read_stack(self, no_bytes: int = 4):
         return self.memory.read(self.get_register("SP").value, no_bytes)
 
-    @property
-    def op_add_register_codes(self):
-        return "GA", "GB", "GC", "GD", None, None, None, None  # these will be set once i have more registers
+    def get_flag(self, flag: str):
+        return self.get_register("FL").bits[self.flag_names[flag]]
+
+    def flag_condition(self, flag: str, condition: bool):
+        self.get_register("FL").bits[self.flag_names[flag]] = int(condition)
 
     def op_add_primary(self, op_add: Byte) -> tuple[str]:
         if op_add.substring[6:8] == 3:
@@ -147,6 +152,23 @@ class Machine:
         elif dest_type == "memory":
             self.memory.write_at(dest_value, data)
 
+    def get_op_add_primary(self, instruction: ByteArray, operand_size: int, op_add_index: int = 1) -> ByteArray:
+        """Gets the primary argument of an instruction with an op-add byte."""
+        op_type, op_value = self.op_add_primary(instruction[op_add_index])
+        if op_type == "special":
+            if op_value == "none":
+                return ByteArray(operand_size, 0)
+            elif op_value == "given_literal":
+                self.increment_reg("IP", operand_size)
+                return instruction[2:2 + operand_size]
+            elif op_value == "given_address":
+                self.increment_reg("IP", 2)
+                return self.memory.read(instruction[2:4].value, operand_size)
+            else:  # in effect would do nothing but should be avoided
+                raise OpcodeError(f"Bad op-add byte encountered at position {self.instruction_pointer + 1}.")
+        else:
+            return self.read_op_add(instruction[1], "p", operand_size)
+
     def execute_instruction(self, instruction: ByteArray):
         """Executes the instruction written into the given ByteArray.
 
@@ -174,22 +196,36 @@ class Machine:
         elif core == "MOV":
             operand_size = 4 if operation[2] else 1
             if operation.substring[0:2] == 0:
-                op_type, op_value = self.op_add_primary(instruction[1])
-                if op_type == "special":  # op_type == "special"
-                    if op_value == "none":
-                        content = ByteArray(operand_size, 0)
-                    elif op_value == "given_literal":
-                        self.increment_reg("IP", operand_size)
-                        content = instruction[2:2 + operand_size]
-                    elif op_value == "given_address":
-                        self.increment_reg("IP", 2)
-                        content = self.memory.read(instruction[2:4].value, operand_size)
-                    else:  # in effect would do nothing but should be avoided
-                        raise OpcodeError(f"Bad op-add byte encountered at position {self.instruction_pointer+1}.")
-                else:
-                    content = self.read_op_add(instruction[1], "p", operand_size)
-
+                content = self.get_op_add_primary(instruction, operand_size)
                 self.write_op_add(instruction[1], "s", content)
+            elif operation.substring[0:2] == 1:
+                content = instruction[2:2+operand_size]
+                self.write_op_add(instruction[1], "s", content)
+            elif operation.substring[0:2] == 2:
+                content = instruction[3:3+operand_size]
+                self.memory.write_at(instruction[1:3], content)
+
+        elif core in ("ADD", "SUB"):
+            operand_size = 4 if operation[2] else 1
+            a, b = 0, 0
+            if operation.substring[0:2] == 0:
+                a = self.get_op_add_primary(instruction, operand_size).value * (-1 if core == "SUB" else 1)
+                b = self.read_op_add(instruction[1], "s", operand_size).value
+                self.write_op_add(instruction[1], "s", ByteArray(size=operand_size, data=a + b))
+            elif operation.substring[0:2] == 1:
+                a = self.read_op_add(instruction[1], "s", operand_size).value * (-1 if core == "SUB" else 1)
+                b = instruction[2:2+operand_size].value
+                self.write_op_add(instruction[1], "s", ByteArray(size=operand_size, data=a + b))
+            elif operation.substring[0:2] == 2:
+                a = self.memory.read(instruction[1:3], operand_size).value * (-1 if core == "SUB" else 1)
+                b = instruction[3:3+operand_size].value
+                self.memory.write_at(instruction[1:3], ByteArray(size=operand_size, data=a + b))
+
+            self.flag_condition("Z", a + b == 0)
+            if core == "ADD":
+                self.flag_condition("C", a + b > 2 ** (operand_size * 8))
+            if core == "SUB":
+                self.flag_condition("N", a + b < 0)
 
     def run(self, address: int):
         """Runs a program starting at the given memory address."""

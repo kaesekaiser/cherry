@@ -38,6 +38,8 @@ def zero_pad(ls: list, length: int):
 
 def convert_to_bits(data: SupportsBitConversion, length: int = 8) -> list[int]:
     if isinstance(data, int):
+        if data < 0:
+            data += 2 ** length
         return [int(g) for g in f"{data:b}".rjust(length, "0")[:-(length+1):-1]]
     elif isinstance(data, str):
         if re.fullmatch(r"[01]{8}( +[01]{8})*", data):

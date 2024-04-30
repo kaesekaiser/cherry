@@ -147,7 +147,7 @@ class Assembler:
             ret[6:8] = [1, 1]
         return bytes(Byte(ret))
 
-    def common_two_arg_suffix(self, arg1: Argument, arg2: Argument) -> bool:
+    def common_two_arg_suffix(self, arg1: Argument, arg2: Argument) -> str:
         """Gets the mnemonic suffix for common two-arg instructions like MOV and ADD, given their args."""
         valid_pairings = {
             "reg": ("reg", "indr", "mem"),
@@ -160,8 +160,8 @@ class Assembler:
                 f"Invalid argument type {self.on_line_x}: "
                 f"{arg1.type} must be paired with {', '.join(valid_pairings[arg1.type])}"
             )
-        if arg2.type == "reg" and arg1.size != 0 and arg1.size != arg2.size:
-            print(f"Mismatched argument sizes {self.on_line_x}. This is legal, but may cause unexpected behavior.")
+        # if arg2.type == "reg" and arg1.size != 0 and arg1.size != arg2.size:
+        #     print(f"Mismatched argument sizes {self.on_line_x}. This is legal, but may cause unexpected behavior.")
 
         if arg1.type == "lit" and arg2.type != "reg":
             return f"LIT{'IND' if arg2.type == 'indr' else 'MEM'}{'W' if arg1.size == 4 else 'B'}"
@@ -187,30 +187,47 @@ class Assembler:
             raise CherrySyntaxError(f"{mnemonic} expected {correct_arg_count} arguments and got {len(raw_args)} "
                                     f"{self.on_line_x}: {raw_instruction}")
 
-        opcode = 0
+        opcode = 255
         args = [self.interpret_argument(g) for g in raw_args]
         op_add = bytearray([])
         givens = bytearray([])
 
         if mnemonic in self.vague_mnemonics:
             if mnemonic == "PUSH":
-                if args[0].type not in ("blit", "breg", "wlit", "wreg"):
+                if args[0].type not in ("lit", "rag"):
                     raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[0]}")
                 opcode = self.mnemonics[f"{mnemonic}-{args[0].type[1].upper()}{args[0].type[0].upper()}"].code
 
             elif mnemonic == "POP":
-                if args[0].type not in ("breg", "wreg"):
+                if args[0].type != "reg":
                     raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[0]}")
                 opcode = self.mnemonics[f"{mnemonic}-{args[0].type[0].upper()}"].code
 
             elif mnemonic == "MOV":
                 suffix = self.common_two_arg_suffix(*args)
                 opcode = self.mnemonics[f"{mnemonic}-{suffix}"].code
-                for arg in args:
-                    if arg.type in ("lit", "mem") or (arg.type == "indr" and suffix not in ("B", "W")):
-                        givens += bytes(arg)
                 if suffix in ("B", "W"):
                     op_add = self.assemble_op_add(*args)
+                    if args[0].type in ("lit", "mem"):
+                        givens = bytes(args[0])
+                elif suffix.startswith("LITIND"):
+                    op_add = bytes([args[1].value + 184])
+                    givens = bytes(args[0])
+                elif suffix.startswith("LITMEM"):
+                    givens = bytes(args[1]) + bytes(args[0])
+
+            elif mnemonic in ("ADD", "SUB"):
+                suffix = self.common_two_arg_suffix(*args)
+                opcode = self.mnemonics[f"{mnemonic}-{suffix}"].code
+                if suffix in ("B", "W"):
+                    op_add = self.assemble_op_add(*args)
+                    if args[0].type in ("lit", "mem"):
+                        givens = bytes(args[0])
+                elif suffix.startswith("LITIND"):
+                    op_add = bytes([args[1].value + 184])
+                    givens = bytes(args[0])
+                elif suffix.startswith("LITMEM"):
+                    givens = bytes(args[1]) + bytes(args[0])
 
         else:  # fallback
             opcode = self.mnemonics[mnemonic].code

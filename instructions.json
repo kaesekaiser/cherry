@@ -84,11 +84,11 @@
         "mnemonic": "MOV-LITINDB",
         "args": [
             {
-                "type": "lit",
+                "type": "reg",
                 "bytes": 1
             },
             {
-                "type": "reg",
+                "type": "lit",
                 "bytes": 1
             }
         ]
@@ -98,12 +98,12 @@
         "mnemonic": "MOV-LITMEMB",
         "args": [
             {
-                "type": "lit",
-                "bytes": 1
-            },
-            {
                 "type": "mem",
                 "bytes": 2
+            },
+            {
+                "type": "lit",
+                "bytes": 1
             }
         ]
     },
@@ -122,12 +122,12 @@
         "mnemonic": "MOV-LITINDW",
         "args": [
             {
-                "type": "lit",
-                "bytes": 4
-            },
-            {
                 "type": "reg",
                 "bytes": 1
+            },
+            {
+                "type": "lit",
+                "bytes": 4
             }
         ]
     },
@@ -136,12 +136,12 @@
         "mnemonic": "MOV-LITMEMW",
         "args": [
             {
-                "type": "lit",
-                "bytes": 4
-            },
-            {
                 "type": "mem",
                 "bytes": 2
+            },
+            {
+                "type": "lit",
+                "bytes": 4
             }
         ]
     },

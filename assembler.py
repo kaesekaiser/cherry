@@ -59,15 +59,17 @@ class Assembler:
         if ":" in dl:
             return int(dl.split(":")[1])
         else:
-            return 1 if int("".join(c for c in dl.split(":")[0] if c in "0123456789")) <= 255 else 4
+            return 1 if -127 <= int(dl) <= 255 else 4
 
     @staticmethod
     def is_valid_dec_literal(dl: str):
-        if not re.fullmatch(r"(?i)d[0-9]{1,3}(_?[0-9]{3})*(:[124])?", dl):
+        if not re.fullmatch(r"-?[0-9]+(:[14])?", dl):
             return False
-        n = int("".join(c for c in dl.split(":")[0] if c in "0123456789"))
+        n = int(dl.split(":")[0])
         length = Assembler.read_dec_literal_length(dl)
-        return n <= 2 ** (length * 8) - 1
+        if n < 0:
+            n += 2 ** (length * 8)
+        return 0 <= n <= 2 ** (length * 8) - 1
 
     @staticmethod
     def is_valid_hex_literal(hl: str):
@@ -78,7 +80,7 @@ class Assembler:
 
         Throws a CherrySyntaxError if the argument is invalid, and thus doubles as an argument validator."""
 
-        if argument.upper() in self.register_names:
+        if argument.upper() in self.register_names and self.register_names[argument.upper()].op_add != -1:
             return Argument(f"reg", self.register_names[argument.upper()].pointer)
 
         elif re.match(r"[bB]", argument):
@@ -89,17 +91,6 @@ class Assembler:
                 return Argument("lit", int(argument[1:], 2), lit_size=1)
             elif len(bts) == 4:
                 return Argument("lit", int("".join(g for g in argument[1:].split("_")[::-1]), 2), lit_size=4)
-            else:
-                raise CherrySyntaxError(f"Invalid literal length {self.on_line_x}: {argument}")
-
-        elif re.match(r"[dD]", argument):
-            if not self.is_valid_dec_literal(argument):
-                raise CherrySyntaxError(f"Invalid decimal integer {self.on_line_x}: {argument}")
-            bts = self.read_dec_literal_length(argument)
-            if bts == 1:
-                return Argument("lit", int(re.sub(r"[^0-9]", "", argument.split(":")[0])), lit_size=1)
-            elif bts == 4:
-                return Argument("lit", int(re.sub(r"[^0-9]", "", argument.split(":")[0])), lit_size=4)
             else:
                 raise CherrySyntaxError(f"Invalid literal length {self.on_line_x}: {argument}")
 
@@ -115,10 +106,10 @@ class Assembler:
                 raise CherrySyntaxError(f"Invalid literal length {self.on_line_x}: {argument}")
 
         elif argument.startswith("#"):
-            if re.match(r"#[dD]", argument):
-                if not re.fullmatch(r"#[dD][0-9]{1,3}(_?[0-9]{3})*", argument):
+            if re.match(r"#[0-9]", argument):
+                if not re.fullmatch(r"#[0-9]+", argument):
                     raise CherrySyntaxError(f"Invalid decimal memory address {self.on_line_x}: {argument}")
-                return Argument("mem", int(re.sub(r"[^0-9]", "", argument[2:])))
+                return Argument("mem", int(argument[1:]))
             elif re.match(r"#[hH]", argument):
                 if not re.fullmatch(r"(?i)#h[a-f0-9]{1,3}(_?[a-f0-9]{3})*", argument):
                     raise CherrySyntaxError(f"Invalid hexadecimal memory address {self.on_line_x}: {argument}")
@@ -129,15 +120,28 @@ class Assembler:
                 raise CherrySyntaxError(f"Invalid register name {self.on_line_x}: {argument}")
             return Argument("indr", self.register_names[reg].pointer)
 
+        elif re.fullmatch(r"-?[0-9]+(:[14])?", argument):
+            if not self.is_valid_dec_literal(argument):
+                raise CherrySyntaxError(f"Invalid integer literal {self.on_line_x}: {argument}")
+            bts = self.read_dec_literal_length(argument)
+            n = int(argument.split(":")[0])
+            if n < 0:
+                n += 2 ** (bts * 8)
+            if bts == 1:
+                return Argument("lit", n, lit_size=1)
+            elif bts == 4:
+                return Argument("lit", n, lit_size=4)
+            else:
+                raise CherrySyntaxError(f"Invalid literal length {self.on_line_x}: {argument}")
+
         else:
             raise CherrySyntaxError(f"Invalid argument {self.on_line_x}: {argument}")
 
-    @staticmethod
-    def assemble_op_add(primary: Argument, secondary: Argument) -> bytes:
+    def assemble_op_add(self, primary: Argument, secondary: Argument) -> bytes:
         ret = [0 for _ in range(8)]
-        ret[0:3] = convert_to_bits(secondary.value, 3)  # converting register pointer to bits
+        ret[0:3] = convert_to_bits(self.register_pointers[secondary.value].op_add, 3)
         if primary.type.endswith("reg") or primary.type == "indr":
-            ret[3:6] = convert_to_bits(primary.value, 3)
+            ret[3:6] = convert_to_bits(self.register_pointers[primary.value].op_add, 3)
             ret[6:8] = [int(primary.type == "indr"), int(secondary.type == "indr")]
         else:
             if primary.type.endswith("lit"):
@@ -170,14 +174,20 @@ class Assembler:
 
     def assemble_instruction(self, raw_instruction: str) -> bytes:
         """Assembles one line of a file into bytecode."""
-        s = raw_instruction.split("%")[0].strip()  # remove comments and trailing spaces
-        if not (mnemonic := re.match(r"(?i)[A-Z\-]+( +|$)", s)):
+        s = raw_instruction.split("//")[0].strip()  # remove comments and trailing spaces
+        if not (match := re.match(r"(?i)[A-Z\-]+( +|$)", s)):
             raise CherrySyntaxError(f"No mnemonic {self.on_line_x}: {raw_instruction}")
 
-        if " " not in s:
-            mnemonic, raw_args = mnemonic[0].strip().upper(), []
+        mnemonic, s = match[0].strip().upper(), s[match.end():]
+        if mnemonic.startswith("IF") and mnemonic in self.valid_mnemonics:
+            prefix = bytes([self.mnemonics[mnemonic].code])
+            if not (match := re.match(r"(?i)[A-Z\-]+( +|$)", s)):
+                raise CherrySyntaxError(f"No mnemonic after conditional {self.on_line_x}: {raw_instruction}")
+            mnemonic, s = match[0].strip().upper(), s[match.end():]
         else:
-            mnemonic, raw_args = mnemonic[0].strip().upper(), re.split(r", *| +", s[len(mnemonic[0]):])
+            prefix = bytes([])
+
+        raw_args = re.split(r", *| +", s)
         if mnemonic not in self.valid_mnemonics:
             raise CherrySyntaxError(f"Invalid mnemonic {self.on_line_x}: {raw_instruction}")
 
@@ -203,7 +213,7 @@ class Assembler:
                     raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[0]}")
                 opcode = self.mnemonics[f"{mnemonic}-{args[0].type[0].upper()}"].code
 
-            elif mnemonic == "MOV":
+            elif mnemonic in ("MOV", "ADD", "SUB", "CMP"):  # standard op-add commands
                 suffix = self.common_two_arg_suffix(*args)
                 opcode = self.mnemonics[f"{mnemonic}-{suffix}"].code
                 if suffix in ("B", "W"):
@@ -216,24 +226,15 @@ class Assembler:
                 elif suffix.startswith("LITMEM"):
                     givens = bytes(args[1]) + bytes(args[0])
 
-            elif mnemonic in ("ADD", "SUB"):
-                suffix = self.common_two_arg_suffix(*args)
-                opcode = self.mnemonics[f"{mnemonic}-{suffix}"].code
-                if suffix in ("B", "W"):
-                    op_add = self.assemble_op_add(*args)
-                    if args[0].type in ("lit", "mem"):
-                        givens = bytes(args[0])
-                elif suffix.startswith("LITIND"):
-                    op_add = bytes([args[1].value + 184])
-                    givens = bytes(args[0])
-                elif suffix.startswith("LITMEM"):
-                    givens = bytes(args[1]) + bytes(args[0])
+        elif mnemonic in ("JMP", "JREL"):
+            opcode = self.mnemonics[mnemonic].code
+            givens = bytes(args[0])
 
         else:  # fallback
             opcode = self.mnemonics[mnemonic].code
 
         instruction = bytearray([opcode])
-        return instruction + op_add + givens
+        return prefix + instruction + op_add + givens
 
     def assemble_file(self, source_path: str, destination_path: str, mode: str = "b"):
         open(destination_path, "w")  # clear output file if it exists

@@ -2,22 +2,62 @@
     {
         "pointer": 0,
         "name": "GA",
-        "size": 4
+        "size": 4,
+        "children": {
+            "AL": 0
+        },
+        "op_add": 0
+    },
+    {
+        "pointer": 64,
+        "name": "AL",
+        "size": 1,
+        "op_add": 0
     },
     {
         "pointer": 1,
         "name": "GB",
-        "size": 4
+        "size": 4,
+        "children": {
+            "BL": 0
+        },
+        "op_add": 1
+    },
+    {
+        "pointer": 65,
+        "name": "BL",
+        "size": 1,
+        "op_add": 1
     },
     {
         "pointer": 2,
         "name": "GC",
-        "size": 4
+        "size": 4,
+        "children": {
+            "CL": 0
+        },
+        "op_add": 2
+    },
+    {
+        "pointer": 66,
+        "name": "CL",
+        "size": 1,
+        "op_add": 2
     },
     {
         "pointer": 3,
         "name": "GD",
-        "size": 4
+        "size": 4,
+        "children": {
+            "DL": 0
+        },
+        "op_add": 3
+    },
+    {
+        "pointer": 67,
+        "name": "DL",
+        "size": 1,
+        "op_add": 3
     },
     {
         "pointer": 128,

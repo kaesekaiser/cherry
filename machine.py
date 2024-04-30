@@ -12,6 +12,7 @@ class Register:
         self.children = dict(children)
         self.name = kwargs.get("name")
         self.pointer = kwargs.get("pointer", 0)
+        self.op_add = kwargs.get("op_add", -1)
 
     @property
     def bytes(self):
@@ -63,7 +64,7 @@ class Drive(Register):
 
 # noinspection PyTupleAssignmentBalance
 class Machine:
-    flag_names = {"Z": 0, "C": 1, "N": 2}
+    flag_names = {"Z": 0, "C": 1, "N": 2, "H": 7}
     op_add_register_codes = "GA", "GB", "GC", "GD", None, None, None, None  # these will be set later
 
     def __init__(self):
@@ -78,7 +79,7 @@ class Machine:
         return f"  [GA] {self.get_register('GA').hex}    [IP] {self.get_register('IP').hex}\n" \
                f"  [GB] {self.get_register('GB').hex}    [SP] {self.get_register('SP').hex}\n" \
                f"  [GC] {self.get_register('GC').hex}    [FL] {self.get_register('FL')}\n" \
-               f"  [GD] {self.get_register('GD').hex}         ------CZ\n"
+               f"  [GD] {self.get_register('GD').hex}         H----NCZ\n"
 
     def get_register(self, code: str | int | Byte) -> Register:
         if isinstance(code, Byte):
@@ -110,6 +111,12 @@ class Machine:
 
     def get_flag(self, flag: str):
         return self.get_register("FL").bits[self.flag_names[flag]]
+
+    def set_flag(self, flag: str):
+        return self.flag_condition(flag, True)
+
+    def clear_flag(self, flag: str):
+        return self.flag_condition(flag, False)
 
     def flag_condition(self, flag: str, condition: bool):
         self.get_register("FL").bits[self.flag_names[flag]] = int(condition)
@@ -159,20 +166,63 @@ class Machine:
             if op_value == "none":
                 return ByteArray(operand_size, 0)
             elif op_value == "given_literal":
-                self.increment_reg("IP", operand_size)
                 return instruction[2:2 + operand_size]
             elif op_value == "given_address":
-                self.increment_reg("IP", 2)
                 return self.memory.read(instruction[2:4].value, operand_size)
             else:  # in effect would do nothing but should be avoided
                 raise OpcodeError(f"Bad op-add byte encountered at position {self.instruction_pointer + 1}.")
         else:
             return self.read_op_add(instruction[1], "p", operand_size)
 
+    def op_add_givens_length(self, op_add: Byte, operand_size: int):
+        op_type, op_value = self.op_add_primary(op_add)
+        if op_type == "special":
+            if op_value == "given_literal":
+                return operand_size
+            elif op_value == "given_address":
+                return 2
+        return 0
+
+    @staticmethod
+    def uses_op_add(opcode: int | Byte):
+        if isinstance(opcode, int):
+            opcode = Byte(opcode)
+        if opcode.substring[0:2] == 0 and opcode.substring[2:] in (24, 28, 32, 40):  # mirrors physical implementation
+            return True
+        return False
+
+    def instruction_length(self, instruction: ByteArray):
+        ret = 0
+        if instruction[0].substring[5:] == 6:  # conditionals
+            ret += 1
+            instruction = instruction[1:]
+        if self.uses_op_add(instruction[0]):
+            ret += self.op_add_givens_length(instruction[1], 4 if instruction[0][2] else 1)
+        return ret + opcodes[instruction.opcode].base_length
+
+    def check_condition(self, mnemonic: str) -> bool:
+        if mnemonic in ("IFZ", "IFNZ"):
+            return self.get_flag("Z") == (mnemonic == "IFZ")
+        if mnemonic in ("IFN", "IFNN"):
+            return self.get_flag("N") == (mnemonic == "IFN")
+        if mnemonic == "IFGT":
+            return not self.get_flag("N") and not self.get_flag("Z")
+        if mnemonic == "IFLT":
+            return self.get_flag("N") and not self.get_flag("Z")
+        if mnemonic == "IFGTE":
+            return not self.get_flag("N") or self.get_flag("Z")
+        if mnemonic == "IFLTE":
+            return self.get_flag("N") or self.get_flag("Z")
+
     def execute_instruction(self, instruction: ByteArray):
         """Executes the instruction written into the given ByteArray.
 
         This function is an extreme abstraction of the process, obviously."""
+
+        if instruction[0].substring[5:] == 6:  # conditionals
+            if not self.check_condition(instruction.mnemonic):
+                return
+            instruction = instruction[1:]
 
         operation = instruction[0]
         mnemonic = instruction.mnemonic
@@ -209,16 +259,16 @@ class Machine:
             operand_size = 4 if operation[2] else 1
             a, b = 0, 0
             if operation.substring[0:2] == 0:
-                a = self.get_op_add_primary(instruction, operand_size).value * (-1 if core == "SUB" else 1)
-                b = self.read_op_add(instruction[1], "s", operand_size).value
+                a = self.get_op_add_primary(instruction, operand_size).signed_int() * (-1 if core == "SUB" else 1)
+                b = self.read_op_add(instruction[1], "s", operand_size).signed_int()
                 self.write_op_add(instruction[1], "s", ByteArray(size=operand_size, data=a + b))
             elif operation.substring[0:2] == 1:
-                a = self.read_op_add(instruction[1], "s", operand_size).value * (-1 if core == "SUB" else 1)
-                b = instruction[2:2+operand_size].value
+                a = self.read_op_add(instruction[1], "s", operand_size).signed_int() * (-1 if core == "SUB" else 1)
+                b = instruction[2:2+operand_size].signed_int()
                 self.write_op_add(instruction[1], "s", ByteArray(size=operand_size, data=a + b))
             elif operation.substring[0:2] == 2:
-                a = self.memory.read(instruction[1:3], operand_size).value * (-1 if core == "SUB" else 1)
-                b = instruction[3:3+operand_size].value
+                a = self.memory.read(instruction[1:3], operand_size).signed_int() * (-1 if core == "SUB" else 1)
+                b = instruction[3:3+operand_size].signed_int()
                 self.memory.write_at(instruction[1:3], ByteArray(size=operand_size, data=a + b))
 
             self.flag_condition("Z", a + b == 0)
@@ -226,6 +276,30 @@ class Machine:
                 self.flag_condition("C", a + b > 2 ** (operand_size * 8))
             if core == "SUB":
                 self.flag_condition("N", a + b < 0)
+
+        elif core == "CMP":
+            operand_size = 4 if operation[2] else 1
+            a, b = 0, 0
+            if operation.substring[0:2] == 0:
+                a = self.get_op_add_primary(instruction, operand_size).signed_int()
+                b = self.read_op_add(instruction[1], "s", operand_size).signed_int()
+            elif operation.substring[0:2] == 1:
+                a = self.read_op_add(instruction[1], "s", operand_size).signed_int()
+                b = instruction[2:2+operand_size].signed_int()
+            elif operation.substring[0:2] == 2:
+                a = self.memory.read(instruction[1:3], operand_size).signed_int()
+                b = instruction[3:3+operand_size].signed_int()
+
+            self.flag_condition("Z", a == b)
+            self.flag_condition("N", a < b)
+
+        elif core == "JMP":
+            self.write_to_register("IP", instruction[1:3])
+            self.set_flag("H")
+
+        elif core == "JREL":
+            self.increment_reg("IP", instruction[1].signed_int())
+            self.set_flag("H")
 
     def run(self, address: int):
         """Runs a program starting at the given memory address."""
@@ -238,7 +312,10 @@ class Machine:
                 break
             else:
                 self.execute_instruction(next_instruction)
-            self.increment_reg("IP", opcodes[next_instruction.opcode].base_length)
+            if not self.get_flag("H"):
+                self.increment_reg("IP", self.instruction_length(next_instruction))
+            else:
+                self.clear_flag("H")
             print(self.state_map)
             self.operation_counter += 1
         print("System halted.")

@@ -138,6 +138,10 @@ class Byte:  # not a fan of the built-in binary classes
     def substring(self):
         return SubValue(self.bits, self.size)
 
+    def signed_int(self):
+        return int("".join(str(g) for g in self.bits.__reversed__()), 2) - \
+            (2 ** self.size if self.bits[-1] else 0)
+
 
 class SubValue:
     def __init__(self, data: SupportsBitConversion, size: int):
@@ -192,3 +196,7 @@ class ByteArray(Byte):
 
     def __len__(self):
         return len(self.bits) // 8
+
+    def signed_int(self):
+        return int("".join(str(g) for g in self.bits.__reversed__()), 2) - \
+            (2 ** (self.size * 8) if self.bits[-1] else 0)

@@ -140,7 +140,7 @@ class Assembler:
             ret[6:8] = [1, 1]
         return bytes(Byte(ret))
 
-    def common_two_arg_suffix(self, arg1: Argument, arg2: Argument) -> str:
+    def common_two_arg_suffix(self, arg1: Argument, arg2: Argument, force_operand_size: int = 0) -> str:
         """Gets the mnemonic suffix for common two-arg instructions like MOV and ADD, given their args."""
         valid_pairings = {
             "reg": ("reg", "indr", "mem"),
@@ -158,7 +158,7 @@ class Assembler:
 
         if arg1.type == "lit" and arg2.type != "reg":
             return f"LIT{'IND' if arg2.type == 'indr' else 'MEM'}{'W' if arg1.size == 4 else 'B'}"
-        operand_size = arg1.size if arg1.size else arg2.size
+        operand_size = force_operand_size if force_operand_size else arg1.size if arg1.size else arg2.size
         return "W" if operand_size == 4 else "B"
 
     def is_reserved_name(self, alias: str):
@@ -197,6 +197,17 @@ class Assembler:
         if mnemonic not in self.valid_mnemonics:
             raise CherrySyntaxError(f"Invalid mnemonic {self.on_line_x}: {raw_instruction}")
 
+        if "-" in mnemonic:
+            if mnemonic.split("-")[1] == "B":
+                force_size = 1
+            elif mnemonic.split("-")[1] == "W":
+                force_size = 4
+            else:
+                raise CherrySyntaxError(f"Over-specified mnemonic {self.on_line_x}: {raw_instruction}")
+            mnemonic = mnemonic.split("-")[0]
+        else:
+            force_size = 0
+
         correct_arg_count = self.vague_mnemonics[mnemonic] if mnemonic in self.vague_mnemonics \
             else len(self.mnemonics[mnemonic].args)
         if len(raw_args) != correct_arg_count:
@@ -208,17 +219,19 @@ class Assembler:
         givens = bytearray([])
 
         if mnemonic == "PUSH":
-            if args[0].type not in ("lit", "rag"):
+            if args[0].type not in ("lit", "reg"):
                 raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[0]}")
-            opcode = self.mnemonics[f"{mnemonic}-{args[0].type[1].upper()}{args[0].type[0].upper()}"].code
+            size = force_size if force_size else args[0].size
+            opcode = self.mnemonics[f"{mnemonic}-{args[0].type[0].upper()}{'W' if size == 4 else 'B'}"].code
 
         elif mnemonic == "POP":
             if args[0].type != "reg":
                 raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[0]}")
-            opcode = self.mnemonics[f"{mnemonic}-{args[0].type[0].upper()}"].code
+            size = force_size if force_size else args[0].size
+            opcode = self.mnemonics[f"{mnemonic}-{'W' if size == 4 else 'B'}"].code
 
         elif mnemonic in ("MOV", "ADD", "SUB", "CMP"):  # standard op-add commands
-            suffix = self.common_two_arg_suffix(*args)
+            suffix = self.common_two_arg_suffix(*args, force_operand_size=force_size)
             opcode = self.mnemonics[f"{mnemonic}-{suffix}"].code
             if suffix in ("B", "W"):
                 op_add = self.assemble_op_add(*args)

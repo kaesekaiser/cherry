@@ -186,7 +186,7 @@ class ByteArray(Byte):
     def __str__(self):
         return " ".join(str(g) for g in self.bytes)
 
-    def __getitem__(self, item) -> Byte:
+    def __getitem__(self, item):  # -> Byte | ByteArray
         if isinstance(item, slice):
             return ByteArray.from_bits([j for g in self.bytes[item] for j in g.bits])
         return self.bytes[item]

@@ -73,6 +73,7 @@ class Machine:
         self.parent_registers = {j: g for g in self.register_names.values() for j in g.children}
         self.memory = Drive(65536)  # just implementing memory as a continuous linear address space w/o paging
         self.operation_counter = 0
+        self.halted = False
 
     @property
     def state_map(self):
@@ -109,8 +110,8 @@ class Machine:
     def read_stack(self, no_bytes: int = 4):
         return self.memory.read(self.get_register("SP").value, no_bytes)
 
-    def get_flag(self, flag: str):
-        return self.get_register("FL").bits[self.flag_names[flag]]
+    def get_flag(self, flag: str) -> bool:
+        return bool(self.get_register("FL").bits[self.flag_names[flag]])
 
     def set_flag(self, flag: str):
         return self.flag_condition(flag, True)
@@ -121,7 +122,7 @@ class Machine:
     def flag_condition(self, flag: str, condition: bool):
         self.get_register("FL").bits[self.flag_names[flag]] = int(condition)
 
-    def op_add_primary(self, op_add: Byte) -> tuple[str]:
+    def op_add_primary(self, op_add: Byte) -> tuple[str, str | int]:
         if op_add.substring[6:8] == 3:
             return "special", ("none", "given_literal", None, None, "given_address", None, None, None)[op_add.substring[3:6]]
         elif op_add.substring[6:8] == 1:
@@ -129,7 +130,7 @@ class Machine:
         else:
             return "register", self.op_add_register_codes[op_add.substring[3:6]]
 
-    def op_add_secondary(self, op_add: Byte) -> tuple[str]:
+    def op_add_secondary(self, op_add: Byte) -> tuple[str, str | int]:
         if op_add.substring[6:8] == 2:
             return "memory", self.get_register(self.op_add_register_codes[op_add.substring[0:3]]).value
         else:
@@ -301,26 +302,38 @@ class Machine:
             self.increment_reg("IP", instruction[1].signed_int())
             self.set_flag("H")
 
-    def run(self, address: int):
+        elif core == "HLT":
+            self.halted = True
+
+    def run(self, address: int, step_by_step: bool = False, silent: bool = False):
         """Runs a program starting at the given memory address."""
         self.write_to_register("IP", address)
-        print(f"Initial state:\n\n{self.state_map}")
+        if not silent:
+            print(f"Initial state:\n\n{self.state_map}")
+            if step_by_step:
+                _ = input("This machine is operating in step-by-step mode. Press Enter to advance by one step.")
         while True:
             next_instruction = self.memory.read(self.instruction_pointer, 16)
-            print(f"Instruction {self.operation_counter}: {next_instruction.hex}\n")
-            if next_instruction.mnemonic == "HLT":
+            if not silent:
+                print(f"Instruction {self.operation_counter}: {next_instruction.hex}\n")
+            self.execute_instruction(next_instruction)
+            if self.halted:
                 break
-            else:
-                self.execute_instruction(next_instruction)
             if not self.get_flag("H"):
                 self.increment_reg("IP", self.instruction_length(next_instruction))
             else:
                 self.clear_flag("H")
-            print(self.state_map)
+            if not silent:
+                print(self.state_map)
+                if step_by_step:
+                    _ = input()
             self.operation_counter += 1
-        print("System halted.")
+        if silent:
+            print(f"{self.state_map}\nSystem halted after {self.operation_counter} operations.")
+        else:
+            print("System halted.")
 
-    def execute_file(self, path: str):
+    def execute_file(self, path: str, step_by_step: bool = False, silent: bool = False):
         """Executes a raw bytecode file with the given path."""
         with open(path, "rb") as fp:
             # write file to memory in pages to prevent massive list or I/O operations
@@ -329,4 +342,4 @@ class Machine:
             while bts := fp.read(page_length):
                 self.memory.write_at(page * page_length, bts, page_length)
                 page += 1
-        self.run(0)
+        self.run(0, step_by_step, silent)

@@ -2,6 +2,9 @@ from sys import stdout
 from bytes import *
 
 
+SupportsGetRegister = str | int | Byte
+
+
 class OpcodeError(ValueError):
     pass
 
@@ -33,6 +36,9 @@ class Register:
 
     def __getitem__(self, item) -> Byte | ByteArray:
         return self.bytes[item]
+
+    def __setitem__(self, key, value):
+        self.bytes[key] = value
 
     def __str__(self):
         return str(self.bytes)
@@ -67,6 +73,8 @@ class Drive(Register):
 class Machine:
     flag_names = {"Z": 0, "C": 1, "N": 2, "H": 7}
     op_add_register_codes = "GA", "GB", "GC", "GD", None, None, None, None  # these will be set later
+    save_on_call = ["GA", "GB", "GC", "GD", "FL", "RI", "RS"]
+    # registers saved to the stack when executing a CALL instruction
 
     def __init__(self):
         self.register_names = {g["name"]: Register.from_json(g) for g in registers}
@@ -83,7 +91,7 @@ class Machine:
                f"  [GC] {self.get_register('GC').hex}    [FL] {self.get_register('FL')}\n" \
                f"  [GD] {self.get_register('GD').hex}         H----NCZ\n"
 
-    def get_register(self, code: str | int | Byte) -> Register:
+    def get_register(self, code: SupportsGetRegister) -> Register:
         if isinstance(code, Byte):
             code = code.value
         return self.register_names[self.register_pointers.get(code, code)]
@@ -92,12 +100,18 @@ class Machine:
     def instruction_pointer(self):
         return self.get_register("IP").value
 
-    def write_to_register(self, pointer: str | int | Byte, data: SupportsBitConversion | Byte):
+    def read_register(self, pointer: SupportsGetRegister) -> ByteArray:
+        return self.get_register(pointer).bytes
+
+    def write_to_register(self, pointer: SupportsGetRegister, data: SupportsBitConversion | Byte):
         (register := self.get_register(pointer)).write(data)
         for k, v in register.children.items():
             self.get_register(k).write(register.bytes[v:])
         if parent := self.parent_registers.get(register.name):
             self.copy_change_to_parent(register, parent)
+
+    def move_register(self, source: SupportsGetRegister, destination: SupportsGetRegister):
+        self.write_to_register(destination, self.read_register(source))
 
     def copy_change_to_parent(self, child: Register, parent: Register):
         """When a child register is overwritten, the change is copied over to its parent via this function."""
@@ -108,8 +122,26 @@ class Machine:
     def increment_reg(self, pointer: str | int | Byte, n: int = 1):
         self.write_to_register(pointer, self.get_register(pointer).value + n)
 
-    def read_stack(self, no_bytes: int = 4):
+    def push(self, data: ByteArray):
+        self.increment_reg("SP", -data.size)
+        self.memory.write_at(self.get_register("SP").value, data)
+
+    def push_all_registers(self):
+        for reg in self.save_on_call:
+            self.push(self.get_register(reg).bytes)
+
+    def read_stack(self, no_bytes: int = 4) -> ByteArray:
         return self.memory.read(self.get_register("SP").value, no_bytes)
+
+    def pop(self, no_bytes: int = 4) -> ByteArray:
+        ret = self.read_stack(no_bytes)
+        self.increment_reg("SP", no_bytes)
+        return ret
+
+    def pop_all_registers(self):
+        for reg_name in self.save_on_call.__reversed__():
+            reg = self.get_register(reg_name)
+            reg.write(self.pop(reg.size))
 
     def get_flag(self, flag: str) -> bool:
         return bool(self.get_register("FL").bits[self.flag_names[flag]])
@@ -216,15 +248,17 @@ class Machine:
         if mnemonic == "IFLTE":
             return self.get_flag("N") or self.get_flag("Z")
 
-    def execute_instruction(self, instruction: ByteArray):
+    def execute_instruction(self, raw_instruction: ByteArray):
         """Executes the instruction written into the given ByteArray.
 
         This function is an extreme abstraction of the process, obviously."""
 
-        if instruction[0][5:] == 6:  # conditionals
-            if not self.check_condition(instruction.mnemonic):
+        if raw_instruction[0][5:] == 6:  # conditionals
+            if not self.check_condition(raw_instruction.mnemonic):
                 return
-            instruction = instruction[1:]
+            instruction = raw_instruction[1:]
+        else:
+            instruction = raw_instruction
 
         operation = instruction[0]
         mnemonic = instruction.mnemonic
@@ -300,7 +334,7 @@ class Machine:
         elif core == "OUT":
             operand_size = 4 if operation[2] else 1
             if operation[0:2] == 0:  # register
-                content = self.get_op_add_primary(instruction, operand_size).ascii()
+                content = self.read_op_add(instruction[1], "p", operand_size).ascii()
             elif operation[0:2] == 1:  # memory
                 content = self.memory.read(instruction[1:3], operand_size).ascii()
             elif operation[0:2] == 2:  # literal
@@ -316,6 +350,24 @@ class Machine:
 
         elif core == "JREL":
             self.increment_reg("IP", instruction[1].signed_int())
+            self.set_flag("H")
+
+        elif core == "CALL":
+            if suffix == "MEM":
+                dest = instruction[1:3]
+            else:
+                dest = self.read_op_add(instruction[1], "p", 2)
+            self.push_all_registers()
+            self.increment_reg("IP", self.instruction_length(raw_instruction))
+            self.move_register("IP", "RI")
+            self.move_register("SP", "RS")
+            self.write_to_register("IP", dest)
+            self.set_flag("H")
+
+        elif core == "RET":
+            self.move_register("RS", "SP")
+            self.move_register("RI", "IP")
+            self.pop_all_registers()
             self.set_flag("H")
 
         elif core == "HLT":

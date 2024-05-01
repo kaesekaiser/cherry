@@ -71,6 +71,16 @@
         "data": "11110000 00000000"
     },
     {
+        "pointer": 130,
+        "name": "RI",
+        "size": 2
+    },
+    {
+        "pointer": 131,
+        "name": "RS",
+        "size": 2
+    },
+    {
         "pointer": 192,
         "name": "FL",
         "size": 1

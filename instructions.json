@@ -90,6 +90,31 @@
         ]
     },
     {
+        "code": 56,
+        "mnemonic": "CALL-REG",
+        "args": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ]
+    },
+    {
+        "code": 57,
+        "mnemonic": "CALL-MEM",
+        "args": [
+            {
+                "type": "mem",
+                "bytes": 2
+            }
+        ]
+    },
+    {
+        "code": 63,
+        "mnemonic": "RET",
+        "args": []
+    },
+    {
         "code": 64,
         "mnemonic": "PUSH-RB",
         "args": [

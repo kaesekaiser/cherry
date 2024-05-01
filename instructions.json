@@ -10,6 +10,66 @@
         "args": []
     },
     {
+        "code": 16,
+        "mnemonic": "OUT-B",
+        "args": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ]
+    },
+    {
+        "code": 17,
+        "mnemonic": "OUT-MEMB",
+        "args": [
+            {
+                "type": "mem",
+                "bytes": 2
+            }
+        ]
+    },
+    {
+        "code": 18,
+        "mnemonic": "OUT-LITB",
+        "args": [
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ]
+    },
+    {
+        "code": 20,
+        "mnemonic": "OUT-W",
+        "args": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ]
+    },
+    {
+        "code": 21,
+        "mnemonic": "OUT-MEMW",
+        "args": [
+            {
+                "type": "mem",
+                "bytes": 2
+            }
+        ]
+    },
+    {
+        "code": 22,
+        "mnemonic": "OUT-LITW",
+        "args": [
+            {
+                "type": "lit",
+                "bytes": 4
+            }
+        ]
+    },
+    {
         "code": 48,
         "mnemonic": "JMP",
         "args": [

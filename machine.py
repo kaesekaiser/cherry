@@ -1,3 +1,4 @@
+from sys import stdout
 from bytes import *
 
 
@@ -123,18 +124,18 @@ class Machine:
         self.get_register("FL").bits[self.flag_names[flag]] = int(condition)
 
     def op_add_primary(self, op_add: Byte) -> tuple[str, str | int]:
-        if op_add.substring[6:8] == 3:
-            return "special", ("none", "given_literal", None, None, "given_address", None, None, None)[op_add.substring[3:6]]
-        elif op_add.substring[6:8] == 1:
-            return "memory", self.get_register(self.op_add_register_codes[op_add.substring[3:6]]).value
+        if op_add[6:8] == 3:
+            return "special", ("none", "given_literal", None, None, "given_address", None, None, None)[int(op_add[3:6])]
+        elif op_add[6:8] == 1:
+            return "memory", self.get_register(self.op_add_register_codes[int(op_add[3:6])]).value
         else:
-            return "register", self.op_add_register_codes[op_add.substring[3:6]]
+            return "register", self.op_add_register_codes[int(op_add[3:6])]
 
     def op_add_secondary(self, op_add: Byte) -> tuple[str, str | int]:
-        if op_add.substring[6:8] == 2:
-            return "memory", self.get_register(self.op_add_register_codes[op_add.substring[0:3]]).value
+        if op_add[6:8] == 2:
+            return "memory", self.get_register(self.op_add_register_codes[int(op_add[0:3])]).value
         else:
-            return "register", self.op_add_register_codes[op_add.substring[0:3]]
+            return "register", self.op_add_register_codes[int(op_add[0:3])]
 
     def read_op_add(self, op_add: Byte, which: str, operand_size: int) -> Byte | ByteArray:
         if which == "s":
@@ -188,13 +189,13 @@ class Machine:
     def uses_op_add(opcode: int | Byte):
         if isinstance(opcode, int):
             opcode = Byte(opcode)
-        if opcode.substring[0:2] == 0 and opcode.substring[2:] in (24, 28, 32, 40):  # mirrors physical implementation
+        if opcode[0:2] == 0 and int(opcode[2:]) in (24, 28, 32, 40):  # mirrors physical implementation
             return True
         return False
 
     def instruction_length(self, instruction: ByteArray):
         ret = 0
-        if instruction[0].substring[5:] == 6:  # conditionals
+        if instruction[0][5:] == 6:  # conditionals
             ret += 1
             instruction = instruction[1:]
         if self.uses_op_add(instruction[0]):
@@ -220,7 +221,7 @@ class Machine:
 
         This function is an extreme abstraction of the process, obviously."""
 
-        if instruction[0].substring[5:] == 6:  # conditionals
+        if instruction[0][5:] == 6:  # conditionals
             if not self.check_condition(instruction.mnemonic):
                 return
             instruction = instruction[1:]
@@ -246,31 +247,32 @@ class Machine:
 
         elif core == "MOV":
             operand_size = 4 if operation[2] else 1
-            if operation.substring[0:2] == 0:
+            if operation[0:2] == 0:  # op-add
                 content = self.get_op_add_primary(instruction, operand_size)
                 self.write_op_add(instruction[1], "s", content)
-            elif operation.substring[0:2] == 1:
+            elif operation[0:2] == 1:  # lit -> indirect
                 content = instruction[2:2+operand_size]
                 self.write_op_add(instruction[1], "s", content)
-            elif operation.substring[0:2] == 2:
+            elif operation[0:2] == 2:  # lit -> memory
                 content = instruction[3:3+operand_size]
                 self.memory.write_at(instruction[1:3], content)
 
         elif core in ("ADD", "SUB"):
             operand_size = 4 if operation[2] else 1
-            a, b = 0, 0
-            if operation.substring[0:2] == 0:
+            if operation[0:2] == 0:  # op-add
                 a = self.get_op_add_primary(instruction, operand_size).signed_int() * (-1 if core == "SUB" else 1)
                 b = self.read_op_add(instruction[1], "s", operand_size).signed_int()
                 self.write_op_add(instruction[1], "s", ByteArray(size=operand_size, data=a + b))
-            elif operation.substring[0:2] == 1:
+            elif operation[0:2] == 1:  # lit -> indirect
                 a = self.read_op_add(instruction[1], "s", operand_size).signed_int() * (-1 if core == "SUB" else 1)
                 b = instruction[2:2+operand_size].signed_int()
                 self.write_op_add(instruction[1], "s", ByteArray(size=operand_size, data=a + b))
-            elif operation.substring[0:2] == 2:
+            elif operation[0:2] == 2:  # lit -> memory
                 a = self.memory.read(instruction[1:3], operand_size).signed_int() * (-1 if core == "SUB" else 1)
                 b = instruction[3:3+operand_size].signed_int()
                 self.memory.write_at(instruction[1:3], ByteArray(size=operand_size, data=a + b))
+            else:
+                return
 
             self.flag_condition("Z", a + b == 0)
             if core == "ADD":
@@ -280,19 +282,33 @@ class Machine:
 
         elif core == "CMP":
             operand_size = 4 if operation[2] else 1
-            a, b = 0, 0
-            if operation.substring[0:2] == 0:
+            if operation[0:2] == 0:  # op-add
                 a = self.get_op_add_primary(instruction, operand_size).signed_int()
                 b = self.read_op_add(instruction[1], "s", operand_size).signed_int()
-            elif operation.substring[0:2] == 1:
+            elif operation[0:2] == 1:  # lit -> indirect
                 a = self.read_op_add(instruction[1], "s", operand_size).signed_int()
                 b = instruction[2:2+operand_size].signed_int()
-            elif operation.substring[0:2] == 2:
+            elif operation[0:2] == 2:  # lit -> memory
                 a = self.memory.read(instruction[1:3], operand_size).signed_int()
                 b = instruction[3:3+operand_size].signed_int()
+            else:
+                return
 
             self.flag_condition("Z", a == b)
             self.flag_condition("N", a < b)
+
+        elif core == "OUT":
+            operand_size = 4 if operation[2] else 1
+            if operation[0:2] == 0:  # register
+                content = self.get_op_add_primary(instruction, operand_size).ascii()
+            elif operation[0:2] == 1:  # memory
+                content = self.memory.read(instruction[1:3], operand_size).ascii()
+            elif operation[0:2] == 2:  # literal
+                content = instruction[1:1+operand_size].ascii()
+            else:
+                return
+
+            stdout.write(content.replace(chr(0), ""))
 
         elif core == "JMP":
             self.write_to_register("IP", instruction[1:3])

@@ -32,8 +32,8 @@ class BitError(ValueError):
 SupportsBitConversion = int | str | list[int] | bytes
 
 
-def zero_pad(ls: list, length: int):
-    return ls[:length] + [0 for _ in range(len(ls), length)]
+def zero_pad(ls: list, length: int, zero=0):
+    return ls[:length] + [zero for _ in range(len(ls), length)]
 
 
 def convert_to_bits(data: SupportsBitConversion, length: int = 8) -> list[int]:
@@ -69,6 +69,14 @@ class Byte:  # not a fan of the built-in binary classes
     def from_bits(ls: list[int]):
         return Byte(data=ls, size=len(ls))
 
+    @staticmethod
+    def from_ascii(s: str):
+        if len(s) > 1:  # mimicking similar error text for ord()
+            raise TypeError(f"Byte.from_ascii() expected a character, but string of length {len(s)} found")
+        if ord(s) > 255:
+            raise ValueError(f"Byte.from_ascii() expected an ASCII character, but was given '{s}'")
+        return Byte(ord(s))
+
     @property
     def is_array(self):
         return self.size * 8 == len(self.bits)
@@ -99,6 +107,8 @@ class Byte:  # not a fan of the built-in binary classes
         return self.__class__(data=self.value ^ other.value, size=self.size)
 
     def __eq__(self, other):
+        if isinstance(other, int):
+            return self.value == other
         return self.bits == other.bits
 
     def __lshift__(self, n):
@@ -109,6 +119,9 @@ class Byte:  # not a fan of the built-in binary classes
 
     def __bytes__(self):
         return bytes([self.value])
+
+    def __int__(self):
+        return self.value
 
     @property
     def hex(self):
@@ -134,24 +147,12 @@ class Byte:  # not a fan of the built-in binary classes
     def flip(self, index: int):
         self.bits[index] = int(not self.bits[index])
 
-    @property
-    def substring(self):
-        return SubValue(self.bits, self.size)
-
     def signed_int(self):
         return int("".join(str(g) for g in self.bits.__reversed__()), 2) - \
             (2 ** self.size if self.bits[-1] else 0)
 
-
-class SubValue:
-    def __init__(self, data: SupportsBitConversion, size: int):
-        self.bits = convert_to_bits(data, length=size)
-
-    def __getitem__(self, item) -> int:
-        if isinstance(item, slice):
-            return int("".join(str(g) for g in self.bits[item].__reversed__()), 2)
-        elif isinstance(item, int):
-            return self.bits[item]
+    def ascii(self):
+        return chr(self.value)
 
 
 class ByteArray(Byte):
@@ -160,8 +161,14 @@ class ByteArray(Byte):
         self.size = size
 
     @staticmethod
-    def from_bytes(bts: list[Byte]):
-        return ByteArray(size=len(bts), data=[j for g in bts for j in g.bits])
+    def from_bytes(bts: list[Byte | int]):
+        return ByteArray(size=len(bts), data=[j for g in bts for j in (g if isinstance(g, Byte) else Byte(g)).bits])
+
+    @staticmethod
+    def from_ascii(s: str, force_size: int = 0):
+        if force_size:
+            return ByteArray.from_bytes(zero_pad([Byte.from_ascii(c) for c in s], force_size))
+        return ByteArray.from_bytes([Byte.from_ascii(c) for c in s])
 
     @staticmethod
     def from_bits(ls: list[int]):
@@ -200,3 +207,6 @@ class ByteArray(Byte):
     def signed_int(self):
         return int("".join(str(g) for g in self.bits.__reversed__()), 2) - \
             (2 ** (self.size * 8) if self.bits[-1] else 0)
+
+    def ascii(self):
+        return "".join(g.ascii() for g in self.bytes)

@@ -1,6 +1,9 @@
 from machine import *
 
 
+space_replace = "冇"
+
+
 class CherrySyntaxError(SyntaxError):
     pass
 
@@ -9,16 +12,20 @@ class Argument:
     def __init__(self, arg_type: str, value: int | str, **kwargs):
         self.type = arg_type
         self.value = value
-        self.lit_size = kwargs.pop("lit_size", 1)
+        self.lit_size = kwargs.pop("lit_size", 0)
 
-    def __len__(self):
+    @staticmethod
+    def null():
+        return Argument("null", 0)
+
+    def __len__(self):  # length in bytes of the argument passed to the interpreter
         if self.type == "lit":
             return self.lit_size
         else:
-            return 2 if self.type in ("mem", ) else 1
+            return 2 if self.type in ("mem", ) else 0 if self.type == "null" else 1
 
     @property
-    def size(self) -> int:
+    def size(self) -> int:  # operand size
         if self.type == "lit":
             return self.lit_size
         elif self.type == "reg":
@@ -77,19 +84,25 @@ class Assembler:
         length = Assembler.integer_arg_length(hl, 16)
         return n <= 2 ** (length * 8) - 1
 
-    def interpret_argument(self, argument: str) -> Argument:
+    def interpret_argument(self, argument: str, force_size: int = 0) -> Argument:
         """Converts an argument written in assembly into an Argument object containing its type and value.
 
         Throws a CherrySyntaxError if the argument is invalid, and thus doubles as an argument validator."""
 
-        if argument.upper() in self.register_names and self.register_names[argument.upper()].op_add != -1:
+        if argument.startswith("'") or argument.startswith('"'):
+            return Argument(
+                "lit", ByteArray.from_ascii(argument[1:-1].replace(space_replace, " ")).value,
+                lit_size=force_size if force_size else 4
+            )
+
+        elif argument.upper() in self.register_names and self.register_names[argument.upper()].op_add != -1:
             return Argument("reg", self.register_names[argument.upper()].pointer)
 
         elif argument.lower() in self.aliases:
             return Argument("alias", argument.lower())
 
         elif re.match(r"[01]{8}[bB]", argument):
-            return Argument("lit", int(argument[:-1], 2), lit_size=1)
+            return Argument("lit", int(argument[:-1], 2), lit_size=force_size if force_size else 1)
 
         elif re.match(r"(?i)[0-9a-f]+h(?=:|$)", argument):
             if not self.is_valid_hex_literal(argument):
@@ -97,7 +110,7 @@ class Assembler:
             n = int(argument.split(":")[0][:-1], 16)
             bts = self.integer_arg_length(argument, 16)
             if bts in (1, 4):
-                return Argument("lit", n, lit_size=bts)
+                return Argument("lit", n, lit_size=force_size if force_size else bts)
             else:
                 raise CherrySyntaxError(f"Invalid literal length {self.on_line_x}: {argument}")
 
@@ -126,7 +139,7 @@ class Assembler:
         else:
             raise CherrySyntaxError(f"Invalid argument {self.on_line_x}: {argument}")
 
-    def assemble_op_add(self, primary: Argument, secondary: Argument) -> bytes:
+    def assemble_op_add(self, primary: Argument, secondary: Argument = Argument.null()) -> bytes:
         ret = [0 for _ in range(8)]
         ret[0:3] = convert_to_bits(self.register_pointers[secondary.value].op_add, 3)
         if primary.type == "reg" or primary.type == "indr":
@@ -165,6 +178,29 @@ class Assembler:
         return alias.upper() in self.register_names or alias.upper() in self.valid_mnemonics or \
             self.is_valid_dec_literal(alias) or self.is_valid_hex_literal(alias)
 
+    def find_strings(self, s: str, max_length: int = 0, start_pos: int = 0) -> dict[int, int]:
+        if "'" not in s[start_pos:] and '"' not in s[start_pos:]:
+            return {}
+        nxt, ret = start_pos, {}
+        while nxt < len(s):
+            if s[nxt] in "'\"":
+                if s[nxt] not in s[nxt+1:]:
+                    raise CherrySyntaxError(f"No closing quote found for string at position {nxt} {self.on_line_x}.")
+                close = nxt + s[nxt+1:].index(s[nxt]) + 1
+                content = s[nxt+1:close]
+                if max_length and (len(content) > max_length):
+                    raise CherrySyntaxError(
+                        f"Overlong string found at position {nxt} {self.on_line_x} "
+                        f"(length {len(content)}, max allowed {max_length})"
+                    )
+                if not content.isascii():
+                    raise CherrySyntaxError(f"Non-ASCII string found at position {nxt} {self.on_line_x}.")
+                ret[nxt] = close + 1
+                nxt = close + 1
+            else:
+                nxt += 1
+        return ret
+
     def assemble_instruction(self, raw_instruction: str) -> bytes:
         """Assembles one line of a file into bytecode."""
         s = raw_instruction.split("//")[0].strip(" \t\n")  # remove comments and trailing whitespace characters
@@ -184,6 +220,10 @@ class Assembler:
         if not (match := re.match(r"(?i)[A-Z\-]+( +|$)", s)):
             raise CherrySyntaxError(f"No mnemonic {self.on_line_x}: {raw_instruction}")
 
+        for start, stop in self.find_strings(s, max_length=4, start_pos=match.end()).items():
+            # replace the spaces in strings with a different character so they don't get split up, then revert later
+            s = s[:start] + s[start:stop].replace(" ", space_replace) + s[stop:]
+
         mnemonic, s = match[0].strip().upper(), s[match.end():]
         if mnemonic.startswith("IF") and mnemonic in self.valid_mnemonics:
             prefix = bytes([self.mnemonics[mnemonic].code])
@@ -193,7 +233,6 @@ class Assembler:
         else:
             prefix = bytes([])
 
-        raw_args = re.split(r", *| +", s) if s else []
         if mnemonic not in self.valid_mnemonics:
             raise CherrySyntaxError(f"Invalid mnemonic {self.on_line_x}: {raw_instruction}")
 
@@ -208,13 +247,14 @@ class Assembler:
         else:
             force_size = 0
 
+        raw_args = re.split(r", *| +", s) if s else []
         correct_arg_count = self.vague_mnemonics[mnemonic] if mnemonic in self.vague_mnemonics \
             else len(self.mnemonics[mnemonic].args)
         if len(raw_args) != correct_arg_count:
             raise CherrySyntaxError(f"{mnemonic} expected {correct_arg_count} arguments and got {len(raw_args)} "
                                     f"{self.on_line_x}: {raw_instruction}")
 
-        args = [self.interpret_argument(g) for g in raw_args]
+        args = [self.interpret_argument(g, force_size=force_size) for g in raw_args]
         op_add = bytearray([])
         givens = bytearray([])
 
@@ -243,6 +283,18 @@ class Assembler:
             elif suffix.startswith("LITMEM"):
                 givens = bytes(args[1]) + bytes(args[0])
 
+        elif mnemonic == "OUT":
+            if args[0].type not in ("reg", "indr", "mem", "lit"):
+                raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[0]}")
+            operand_size = force_size if force_size else args[0].size if args[0].size else 1
+            if args[0].type in ("reg", "indr"):
+                suffix = ""
+                op_add = self.assemble_op_add(args[0])
+            else:
+                suffix = "MEM" if args[0].type == "mem" else "LIT"
+                givens = bytes(args[0])
+            opcode = self.mnemonics[f"{mnemonic}-{suffix}{'W' if operand_size == 4 else 'B'}"].code
+
         elif mnemonic == "JMP":
             if args[0].type not in ("mem", "alias"):
                 raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {raw_args[0]}")
@@ -266,7 +318,7 @@ class Assembler:
     def assemble_file(self, source_path: str, destination_path: str, mode: str = "b"):
         open(destination_path, "w")  # clear output file if it exists
         byte_buffer = bytearray([])
-        with open(source_path) as src, open(destination_path, "at" if mode == "s" else "ab") as dest:
+        with open(source_path, encoding="utf8") as src, open(destination_path, "at" if mode == "s" else "ab") as dest:
             for line in src.readlines():
                 instruction = self.assemble_instruction(line)
                 if instruction:

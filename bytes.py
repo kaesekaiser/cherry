@@ -4,14 +4,15 @@ from math import ceil
 
 
 class Instruction:
-    def __init__(self, code: int, mnemonic: str, args: list[dict]):
+    def __init__(self, code: int, mnemonic: str, operands: list[dict], asm_args: list[list[str]]):
         self.code = code
         self.mnemonic = mnemonic
-        self.args = args
+        self.operands = operands
+        self.asm_args = asm_args
 
     @property
     def base_length(self) -> int:
-        return 1 + sum(g["bytes"] for g in self.args)
+        return 1 + sum(g["bytes"] for g in self.operands)
 
     @staticmethod
     def from_json(js: dict):

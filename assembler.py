@@ -48,7 +48,10 @@ class Assembler:
     def __init__(self):
         self.opcodes = opcodes
         self.mnemonics = {g.mnemonic: g for g in opcodes.values()}
-        self.vague_mnemonics = {g.mnemonic.split("-")[0]: len(g.args) for g in opcodes.values() if "-" in g.mnemonic}
+        self.vague_mnemonics = {
+            g.mnemonic.split("-")[0]: len(g.asm_args)  # each asm mnemonic has exactly one expected arg count
+            for g in opcodes.values() if "-" in g.mnemonic
+        }
         self.register_pointers = {g["pointer"]: Register.from_json(g) for g in registers}
         self.register_names = {g["name"]: Register.from_json(g) for g in registers}
         self.line_counter = 0
@@ -99,7 +102,7 @@ class Assembler:
             return Argument(
                 "lit",
                 ByteArray.from_ascii(self.format_string(argument[1:-1]).replace(space_replace, " ")).value,
-                lit_size=force_size if force_size else 4
+                lit_size=force_size if force_size else 1 if len(self.format_string(argument[1:-1])) == 1 else 4
             )
 
         elif argument.upper() in self.register_names and self.register_names[argument.upper()].op_add != -1:
@@ -146,9 +149,12 @@ class Assembler:
         else:
             raise CherrySyntaxError(f"Invalid argument {self.on_line_x}: {argument}")
 
-    def assemble_op_add(self, primary: Argument, secondary: Argument = Argument.null()) -> bytes:
+    def assemble_op_add(self, primary: Argument, secondary: int | Argument = Argument.null()) -> bytes:
         ret = [0 for _ in range(8)]
-        ret[0:3] = convert_to_bits(self.register_pointers[secondary.value].op_add, 3)
+        if isinstance(secondary, int):
+            ret[0:3] = convert_to_bits(secondary, 3)
+        else:
+            ret[0:3] = convert_to_bits(self.register_pointers[secondary.value].op_add, 3)
         if primary.type == "reg" or primary.type == "ind":
             ret[3:6] = convert_to_bits(self.register_pointers[primary.value].op_add, 3)
             ret[6:8] = [int(primary.type == "ind"), int(secondary.type == "ind")]
@@ -216,23 +222,28 @@ class Assembler:
                 nxt += 1
         return ret
 
-    def check_arg_type(self, arg: Argument, *allowed_types: str):
-        if arg.type not in allowed_types:
-            raise CherrySyntaxError(
-                f"Invalid arg type {self.on_line_x} (expected {', '.join(allowed_types)}; got {arg.type})"
-            )
+    def check_arg_type(self, mnemonic: str, arg: Argument, pos: int = 0):
+        return any(arg.type in m.asm_args[pos] for m in self.matching_mnemonics(mnemonic))
+
+    def arg_count(self, mnemonic: str) -> int:
+        return self.vague_mnemonics[mnemonic] if mnemonic in self.vague_mnemonics \
+            else len(self.mnemonics[mnemonic].asm_args)
+
+    def matching_mnemonics(self, mnemonic: str) -> list[Instruction]:
+        return [v for v in self.mnemonics.values() if v.mnemonic.split("-")[0] == mnemonic] \
+            if mnemonic in self.vague_mnemonics else [self.mnemonics[mnemonic]]
 
     def assemble_instruction(self, raw_instruction: str) -> bytes:
         """Assembles one line of a file into bytecode."""
         s = raw_instruction.split("//")[0].strip(" \t\n")  # remove comments and trailing whitespace characters
         if not s:
-            return
+            return bytes()
         
         if match := self.starts_with_alias(s):
             self.alias_destinations[match[0][:-1].lower()] = self.current_bytecode_length
             s = s[match.end():].strip()
         if not s:
-            return
+            return bytes()
         
         if not (match := re.match(r"(?i)[A-Z\-]+( +|$)", s)):
             raise CherrySyntaxError(f"No mnemonic {self.on_line_x}: {raw_instruction}")
@@ -248,7 +259,7 @@ class Assembler:
                 raise CherrySyntaxError(f"No mnemonic after conditional {self.on_line_x}: {raw_instruction}")
             mnemonic, s = match[0].strip().upper(), s[match.end():]
         else:
-            prefix = bytes([])
+            prefix = bytes()
 
         if mnemonic not in self.valid_mnemonics:
             raise CherrySyntaxError(f"Invalid mnemonic {self.on_line_x}: {raw_instruction}")
@@ -265,23 +276,24 @@ class Assembler:
             force_size = 0
 
         raw_args = re.split(r", *| +", s) if s else []
-        correct_arg_count = self.vague_mnemonics[mnemonic] if mnemonic in self.vague_mnemonics \
-            else len(self.mnemonics[mnemonic].args)
+        correct_arg_count = self.arg_count(mnemonic)
         if len(raw_args) != correct_arg_count:
             raise CherrySyntaxError(f"{mnemonic} expected {correct_arg_count} arguments and got {len(raw_args)} "
                                     f"{self.on_line_x}: {raw_instruction}")
 
         args = [self.interpret_argument(g, force_size=force_size) for g in raw_args]
-        op_add = bytearray([])
-        givens = bytearray([])
+        op_add = bytearray()
+        givens = bytearray()
+
+        for pos, arg in enumerate(args):
+            if not self.check_arg_type(mnemonic, arg, pos):
+                raise CherrySyntaxError(f"Invalid argument type {self.on_line_x}: {arg}")
 
         if mnemonic == "PUSH":
-            self.check_arg_type(args[0], "reg", "lit")
             size = force_size if force_size else args[0].size
             opcode = self.mnemonics[f"{mnemonic}-{args[0].type[0].upper()}{'W' if size == 4 else 'B'}"].code
 
         elif mnemonic == "POP":
-            self.check_arg_type(args[0], "reg")
             size = force_size if force_size else args[0].size
             opcode = self.mnemonics[f"{mnemonic}-{'W' if size == 4 else 'B'}"].code
 
@@ -298,8 +310,31 @@ class Assembler:
             elif suffix.startswith("LITMEM"):
                 givens = bytes(args[1]) + bytes(args[0])
 
+        elif mnemonic == "BIT":
+            if not (0 <= args[1].value <= 7):
+                raise CherrySyntaxError(f"Invalid argument {self.on_line_x}: Second BIT arg must be between 0 and 7.")
+            opcode = self.mnemonics[mnemonic].code
+            op_add = self.assemble_op_add(args[0], args[1].value)
+
+        elif mnemonic == "REFBIT":
+            opcode = self.mnemonics[mnemonic].code
+            op_add = self.assemble_op_add(args[1], args[0])
+
+        elif mnemonic == "BBIT":
+            if not (0 <= args[1].value <= 3):
+                raise CherrySyntaxError(f"Invalid argument {self.on_line_x}: Second BBIT arg must be between 0 and 3.")
+            if not (0 <= args[2].value <= 7):
+                raise CherrySyntaxError(f"Invalid argument {self.on_line_x}: Third BBIT arg must be between 0 and 7.")
+            opcode = self.mnemonics[f"{mnemonic}-{args[1].value}"].code
+            op_add = self.assemble_op_add(args[0], args[1].value)
+
+        elif mnemonic == "BYTE":
+            if not (0 <= args[1].value <= 3):
+                raise CherrySyntaxError(f"Invalid argument {self.on_line_x}: Second BYTE arg must be between 0 and 3.")
+            opcode = self.mnemonics[f"{mnemonic}-{args[1].value}"].code
+            op_add = self.assemble_op_add(args[0], args[2])
+
         elif mnemonic == "OUT":
-            self.check_arg_type(args[0], "reg", "ind", "mem", "lit")
             operand_size = force_size if force_size else args[0].size if args[0].size else 1
             if args[0].type in ("reg", "ind"):
                 suffix = ""
@@ -310,7 +345,6 @@ class Assembler:
             opcode = self.mnemonics[f"{mnemonic}-{suffix}{'W' if operand_size == 4 else 'B'}"].code
 
         elif mnemonic == "JMP":
-            self.check_arg_type(args[0], "mem", "alias")
             opcode = self.mnemonics[mnemonic].code
             if args[0].type == "alias":
                 self.alias_sources[args[0].value] = self.alias_sources.get(args[0].value, []) + \
@@ -318,7 +352,6 @@ class Assembler:
             givens = bytes(args[0])
         
         elif mnemonic == "JREL":
-            self.check_arg_type(args[0], "lit")
             if args[0].size != 1:
                 raise CherrySyntaxError(f"Oversize relative jump {self.on_line_x}: must be between -128 and 127")
             opcode = self.mnemonics[mnemonic].code
@@ -328,7 +361,6 @@ class Assembler:
             givens = bytes(args[0])
 
         elif mnemonic == "CALL":
-            self.check_arg_type(args[0], "reg", "ind", "mem", "alias")
             if args[0].type in ("mem", "alias"):
                 opcode = self.mnemonics[mnemonic + "-MEM"].code
                 if args[0].type == "alias":
@@ -381,7 +413,6 @@ class Assembler:
             raise e
 
         # final checks
-
         try:
             with open(temp_path, "r+b") as fp:
                 for alias in self.aliases:
@@ -401,4 +432,4 @@ class Assembler:
             os.remove(temp_path)
             raise e
         else:
-            print("Assembly completed.")
+            print("[SYS] Assembly completed.")

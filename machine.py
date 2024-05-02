@@ -218,10 +218,12 @@ class Machine:
         return 0
 
     @staticmethod
-    def uses_op_add(opcode: int | Byte):
+    def uses_full_op_add(opcode: int | Byte):
         if isinstance(opcode, int):
             opcode = Byte(opcode)
-        if opcode[0:2] == 0 and int(opcode[2:]) in (24, 28, 32, 40):  # mirrors physical implementation
+        if opcode[2:4] == 0 and int(opcode[4:8]) in (6, 7, 8, 10):  # mirrors physical implementation
+            return True
+        if opcode[4:8] == 11:
             return True
         return False
 
@@ -230,8 +232,8 @@ class Machine:
         if instruction[0][5:] == 6:  # conditionals
             ret += 1
             instruction = instruction[1:]
-        if self.uses_op_add(instruction[0]):
-            ret += self.op_add_givens_length(instruction[1], 4 if instruction[0][2] else 1)
+        if self.uses_full_op_add(instruction[0]):
+            ret += self.op_add_givens_length(instruction[1], 4 if instruction[0][0] else 1)
         return ret + opcodes[instruction.opcode].base_length
 
     def check_condition(self, mnemonic: str) -> bool:
@@ -280,28 +282,28 @@ class Machine:
             self.write_to_register("SP", self.get_register("SP").value + length)
 
         elif core == "MOV":
-            operand_size = 4 if operation[2] else 1
-            if operation[0:2] == 0:  # op-add
+            operand_size = 4 if operation[0] else 1
+            if operation[1:3] == 0:  # op-add
                 content = self.get_op_add_primary(instruction, operand_size)
                 self.write_op_add(instruction[1], "s", content)
-            elif operation[0:2] == 1:  # lit -> indirect
+            elif operation[1:3] == 1:  # lit -> indirect
                 content = instruction[2:2+operand_size]
                 self.write_op_add(instruction[1], "s", content)
-            elif operation[0:2] == 2:  # lit -> memory
+            elif operation[1:3] == 2:  # lit -> memory
                 content = instruction[3:3+operand_size]
                 self.memory.write_at(instruction[1:3], content)
 
         elif core in ("ADD", "SUB"):
-            operand_size = 4 if operation[2] else 1
-            if operation[0:2] == 0:  # op-add
+            operand_size = 4 if operation[0] else 1
+            if operation[1:3] == 0:  # op-add
                 a = self.get_op_add_primary(instruction, operand_size).signed_int() * (-1 if core == "SUB" else 1)
                 b = self.read_op_add(instruction[1], "s", operand_size).signed_int()
                 self.write_op_add(instruction[1], "s", ByteArray(size=operand_size, data=a + b))
-            elif operation[0:2] == 1:  # lit -> indirect
+            elif operation[1:3] == 1:  # lit -> indirect
                 a = self.read_op_add(instruction[1], "s", operand_size).signed_int() * (-1 if core == "SUB" else 1)
                 b = instruction[2:2+operand_size].signed_int()
                 self.write_op_add(instruction[1], "s", ByteArray(size=operand_size, data=a + b))
-            elif operation[0:2] == 2:  # lit -> memory
+            elif operation[1:3] == 2:  # lit -> memory
                 a = self.memory.read(instruction[1:3], operand_size).signed_int() * (-1 if core == "SUB" else 1)
                 b = instruction[3:3+operand_size].signed_int()
                 self.memory.write_at(instruction[1:3], ByteArray(size=operand_size, data=a + b))
@@ -315,14 +317,14 @@ class Machine:
                 self.flag_condition("N", a + b < 0)
 
         elif core == "CMP":
-            operand_size = 4 if operation[2] else 1
-            if operation[0:2] == 0:  # op-add
+            operand_size = 4 if operation[0] else 1
+            if operation[1:3] == 0:  # op-add
                 a = self.get_op_add_primary(instruction, operand_size).signed_int()
                 b = self.read_op_add(instruction[1], "s", operand_size).signed_int()
-            elif operation[0:2] == 1:  # lit -> indirect
+            elif operation[1:3] == 1:  # lit -> indirect
                 a = self.read_op_add(instruction[1], "s", operand_size).signed_int()
                 b = instruction[2:2+operand_size].signed_int()
-            elif operation[0:2] == 2:  # lit -> memory
+            elif operation[1:3] == 2:  # lit -> memory
                 a = self.memory.read(instruction[1:3], operand_size).signed_int()
                 b = instruction[3:3+operand_size].signed_int()
             else:
@@ -331,13 +333,34 @@ class Machine:
             self.flag_condition("Z", a == b)
             self.flag_condition("N", a < b)
 
+        elif core == "BIT":
+            content = self.get_op_add_primary(instruction, 1)
+            bit = int(instruction[1][0:3])
+            self.flag_condition("Z", content[bit])
+
+        elif core == "REFBIT":
+            content = self.read_op_add(instruction[1], "s", 1)
+            bit = int(self.read_op_add(instruction[1], "p", 1)[0][0:3])
+            self.flag_condition("Z", content[0][bit])
+
+        elif core == "BBIT":
+            content = self.get_op_add_primary(instruction, 4)
+            byte = content[int(instruction[0][0:2])]
+            bit = int(instruction[1][0:3])
+            self.flag_condition("Z", byte[bit])
+
+        elif core == "BYTE":
+            content = self.get_op_add_primary(instruction, 4)
+            byte = content[int(instruction[0][0:2])]
+            self.write_op_add(instruction[1], "s", byte)
+
         elif core == "OUT":
-            operand_size = 4 if operation[2] else 1
-            if operation[0:2] == 0:  # register
+            operand_size = 4 if operation[0] else 1
+            if operation[1:3] == 0:  # register
                 content = self.read_op_add(instruction[1], "p", operand_size).ascii()
-            elif operation[0:2] == 1:  # memory
+            elif operation[1:3] == 1:  # memory
                 content = self.memory.read(instruction[1:3], operand_size).ascii()
-            elif operation[0:2] == 2:  # literal
+            elif operation[1:3] == 2:  # literal
                 content = instruction[1:1+operand_size].ascii()
             else:
                 return
@@ -397,12 +420,13 @@ class Machine:
                     _ = input()
             self.operation_counter += 1
         if silent:
-            print(f"{self.state_map}\nSystem halted after {self.operation_counter} operations.")
+            print(f"[SYS] System halted after {self.operation_counter} operations.")
         else:
-            print("System halted.")
+            print("[SYS] System halted.")
 
     def execute_file(self, path: str, step_by_step: bool = False, silent: bool = False):
         """Executes a raw bytecode file with the given path."""
+        print(f"[SYS] Executing file...")
         with open(path, "rb") as fp:
             # write file to memory in pages to prevent massive list or I/O operations
             page = 0

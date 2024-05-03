@@ -104,7 +104,7 @@
         ]
     },
     {
-        "code": 48,
+        "code": 32,
         "mnemonic": "JMP",
         "operands": [
             {
@@ -120,7 +120,7 @@
         ]
     },
     {
-        "code": 49,
+        "code": 33,
         "mnemonic": "JREL",
         "operands": [
             {
@@ -135,7 +135,7 @@
         ]
     },
     {
-        "code": 56,
+        "code": 40,
         "mnemonic": "CALL-REG",
         "operands": [
             {
@@ -150,7 +150,7 @@
         ]
     },
     {
-        "code": 57,
+        "code": 41,
         "mnemonic": "CALL-MEM",
         "operands": [
             {
@@ -166,32 +166,455 @@
         ]
     },
     {
-        "code": 63,
+        "code": 47,
         "mnemonic": "RET",
         "operands": [],
         "asm_args": []
     },
     {
-        "code": 64,
-        "mnemonic": "PUSH-RB",
+        "code": 48,
+        "mnemonic": "AND-B",
         "operands": [
             {
-                "type": "reg",
+                "type": "opadd",
                 "bytes": 1
             }
         ],
         "asm_args": [
             [
-                "reg"
+                "reg",
+                "ind",
+                "mem",
+                "lit"
+            ],
+            [
+                "reg",
+                "ind"
+            ]
+        ]
+    },
+    {
+        "code": 49,
+        "mnemonic": "AND-W",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "reg",
+                "ind",
+                "mem",
+                "lit"
+            ],
+            [
+                "reg",
+                "ind"
+            ]
+        ]
+    },
+    {
+        "code": 50,
+        "mnemonic": "AND-LITINDB",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            },
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "lit"
+            ],
+            [
+                "ind"
+            ]
+        ]
+    },
+    {
+        "code": 51,
+        "mnemonic": "AND-LITINDW",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            },
+            {
+                "type": "lit",
+                "bytes": 4
+            }
+        ],
+        "asm_args": [
+            [
+                "lit"
+            ],
+            [
+                "ind"
+            ]
+        ]
+    },
+    {
+        "code": 52,
+        "mnemonic": "AND-LITMEMB",
+        "operands": [
+            {
+                "type": "mem",
+                "bytes": 2
+            },
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "lit"
+            ],
+            [
+                "mem"
+            ]
+        ]
+    },
+    {
+        "code": 53,
+        "mnemonic": "AND-LITMEMW",
+        "operands": [
+            {
+                "type": "mem",
+                "bytes": 2
+            },
+            {
+                "type": "lit",
+                "bytes": 4
+            }
+        ],
+        "asm_args": [
+            [
+                "lit"
+            ],
+            [
+                "mem"
+            ]
+        ]
+    },
+    {
+        "code": 56,
+        "mnemonic": "OR-B",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "reg",
+                "ind",
+                "mem",
+                "lit"
+            ],
+            [
+                "reg",
+                "ind"
+            ]
+        ]
+    },
+    {
+        "code": 57,
+        "mnemonic": "OR-W",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "reg",
+                "ind",
+                "mem",
+                "lit"
+            ],
+            [
+                "reg",
+                "ind"
+            ]
+        ]
+    },
+    {
+        "code": 58,
+        "mnemonic": "OR-LITINDB",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            },
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "lit"
+            ],
+            [
+                "ind"
+            ]
+        ]
+    },
+    {
+        "code": 59,
+        "mnemonic": "OR-LITINDW",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            },
+            {
+                "type": "lit",
+                "bytes": 4
+            }
+        ],
+        "asm_args": [
+            [
+                "lit"
+            ],
+            [
+                "ind"
+            ]
+        ]
+    },
+    {
+        "code": 60,
+        "mnemonic": "OR-LITMEMB",
+        "operands": [
+            {
+                "type": "mem",
+                "bytes": 2
+            },
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "lit"
+            ],
+            [
+                "mem"
+            ]
+        ]
+    },
+    {
+        "code": 61,
+        "mnemonic": "OR-LITMEMW",
+        "operands": [
+            {
+                "type": "mem",
+                "bytes": 2
+            },
+            {
+                "type": "lit",
+                "bytes": 4
+            }
+        ],
+        "asm_args": [
+            [
+                "lit"
+            ],
+            [
+                "mem"
+            ]
+        ]
+    },
+    {
+        "code": 64,
+        "mnemonic": "XOR-B",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "reg",
+                "ind",
+                "mem",
+                "lit"
+            ],
+            [
+                "reg",
+                "ind"
             ]
         ]
     },
     {
         "code": 65,
-        "mnemonic": "PUSH-RW",
+        "mnemonic": "XOR-W",
         "operands": [
             {
-                "type": "reg",
+                "type": "opadd",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "reg",
+                "ind",
+                "mem",
+                "lit"
+            ],
+            [
+                "reg",
+                "ind"
+            ]
+        ]
+    },
+    {
+        "code": 66,
+        "mnemonic": "XOR-LITINDB",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            },
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "lit"
+            ],
+            [
+                "ind"
+            ]
+        ]
+    },
+    {
+        "code": 67,
+        "mnemonic": "XOR-LITINDW",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            },
+            {
+                "type": "lit",
+                "bytes": 4
+            }
+        ],
+        "asm_args": [
+            [
+                "lit"
+            ],
+            [
+                "ind"
+            ]
+        ]
+    },
+    {
+        "code": 68,
+        "mnemonic": "XOR-LITMEMB",
+        "operands": [
+            {
+                "type": "mem",
+                "bytes": 2
+            },
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "lit"
+            ],
+            [
+                "mem"
+            ]
+        ]
+    },
+    {
+        "code": 69,
+        "mnemonic": "XOR-LITMEMW",
+        "operands": [
+            {
+                "type": "mem",
+                "bytes": 2
+            },
+            {
+                "type": "lit",
+                "bytes": 4
+            }
+        ],
+        "asm_args": [
+            [
+                "lit"
+            ],
+            [
+                "mem"
+            ]
+        ]
+    },
+    {
+        "code": 72,
+        "mnemonic": "NOT-B",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "reg",
+                "ind",
+                "mem"
+            ],
+            [
+                "reg",
+                "ind"
+            ]
+        ]
+    },
+    {
+        "code": 73,
+        "mnemonic": "NOT-W",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "reg",
+                "ind",
+                "mem"
+            ],
+            [
+                "reg",
+                "ind"
+            ]
+        ]
+    },
+    {
+        "code": 80,
+        "mnemonic": "PUSH-RB",
+        "operands": [
+            {
+                "type": "opadd",
                 "bytes": 1
             }
         ],
@@ -202,7 +625,22 @@
         ]
     },
     {
-        "code": 66,
+        "code": 81,
+        "mnemonic": "PUSH-RW",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "reg"
+            ]
+        ]
+    },
+    {
+        "code": 82,
         "mnemonic": "PUSH-LB",
         "operands": [
             {
@@ -217,7 +655,7 @@
         ]
     },
     {
-        "code": 67,
+        "code": 83,
         "mnemonic": "PUSH-LW",
         "operands": [
             {
@@ -232,11 +670,11 @@
         ]
     },
     {
-        "code": 80,
+        "code": 88,
         "mnemonic": "POP-B",
         "operands": [
             {
-                "type": "reg",
+                "type": "opadd",
                 "bytes": 1
             }
         ],
@@ -247,11 +685,11 @@
         ]
     },
     {
-        "code": 81,
+        "code": 89,
         "mnemonic": "POP-W",
         "operands": [
             {
-                "type": "reg",
+                "type": "opadd",
                 "bytes": 1
             }
         ],
@@ -526,7 +964,7 @@
         ]
     },
     {
-        "code": 128,
+        "code": 120,
         "mnemonic": "SUB-B",
         "operands": [
             {
@@ -548,7 +986,7 @@
         ]
     },
     {
-        "code": 129,
+        "code": 121,
         "mnemonic": "SUB-W",
         "operands": [
             {
@@ -570,7 +1008,7 @@
         ]
     },
     {
-        "code": 130,
+        "code": 122,
         "mnemonic": "SUB-LITINDB",
         "operands": [
             {
@@ -592,7 +1030,7 @@
         ]
     },
     {
-        "code": 131,
+        "code": 123,
         "mnemonic": "SUB-LITINDW",
         "operands": [
             {
@@ -614,7 +1052,7 @@
         ]
     },
     {
-        "code": 132,
+        "code": 124,
         "mnemonic": "SUB-LITMEMB",
         "operands": [
             {
@@ -636,7 +1074,7 @@
         ]
     },
     {
-        "code": 133,
+        "code": 125,
         "mnemonic": "SUB-LITMEMW",
         "operands": [
             {

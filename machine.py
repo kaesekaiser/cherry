@@ -157,7 +157,7 @@ class Machine:
 
     def op_add_primary(self, op_add: Byte) -> tuple[str, str | int]:
         if op_add[6:8] == 3:
-            return "special", ("none", "given_literal", None, None, "given_address", None, None, None)[int(op_add[3:6])]
+            return "special", ("null", "given_literal", None, None, "given_address", None, None, None)[int(op_add[3:6])]
         elif op_add[6:8] == 1:
             return "memory", self.get_register(self.op_add_register_codes[int(op_add[3:6])]).value
         else:
@@ -175,6 +175,8 @@ class Machine:
         else:  # which == "p"
             src_type, src_value = self.op_add_primary(op_add)
             if src_type == "special":
+                if src_value == "null":
+                    return 0
                 raise ValueError("Cannot read special operands with read_op_add().")
         if src_type == "register":
             return self.get_register(src_value).bytes[:operand_size]
@@ -203,6 +205,8 @@ class Machine:
                 return instruction[2:2 + operand_size]
             elif op_value == "given_address":
                 return self.memory.read(instruction[2:4].value, operand_size)
+            elif op_value == "null":
+                return ByteArray(size=operand_size, data=0)
             else:  # in effect would do nothing but should be avoided
                 raise OpcodeError(f"Bad op-add byte encountered at position {self.instruction_pointer + 1}.")
         else:
@@ -215,13 +219,15 @@ class Machine:
                 return operand_size
             elif op_value == "given_address":
                 return 2
+            elif op_value == "null":
+                return 0
         return 0
 
     @staticmethod
     def uses_full_op_add(opcode: int | Byte):
         if isinstance(opcode, int):
             opcode = Byte(opcode)
-        if opcode[2:4] == 0 and int(opcode[4:8]) in (6, 7, 8, 10):  # mirrors physical implementation
+        if opcode[1:3] == 0 and int(opcode[4:8]) in (6, 7, 10):  # mirrors physical implementation
             return True
         if opcode[4:8] == 11:
             return True
@@ -268,18 +274,15 @@ class Machine:
         suffix = mnemonic.split("-")[1] if "-" in mnemonic else ""
 
         if core == "PUSH":
-            length = 4 if suffix[1] == "W" else 1
-            if suffix[0] == "R":
-                content = self.get_register(instruction[1]).bytes
-            else:
-                content = instruction[1:1+length]
-            self.write_to_register("SP", self.get_register("SP").value - length)
-            self.memory.write_at(self.get_register("SP").value, content, length)
+            operand_size = 4 if suffix[1] == "W" else 1
+            content = self.get_op_add_primary(instruction, operand_size)
+            self.memory.write_at(self.get_register("SP").value, content, operand_size)
+            self.increment_reg("SP", -operand_size)
 
         elif core == "POP":
-            length = 4 if suffix[0] == "W" else 1
-            self.write_to_register(instruction[1], self.read_stack(length))
-            self.write_to_register("SP", self.get_register("SP").value + length)
+            operand_size = 4 if suffix[0] == "W" else 1
+            self.write_to_register(instruction[1], self.read_stack(operand_size))
+            self.increment_reg("SP", operand_size)
 
         elif core == "MOV":
             operand_size = 4 if operation[0] else 1
@@ -332,6 +335,30 @@ class Machine:
 
             self.flag_condition("Z", a == b)
             self.flag_condition("N", a < b)
+
+        elif core in ("AND", "OR", "XOR"):
+            func = (lambda x, y: x & y) if core == "AND" else (lambda x, y: x | y) if core == "OR" \
+                else (lambda x, y: x ^ y)
+            operand_size = 4 if operation[0] else 1
+            if operation[1:3] == 0:  # op-add
+                a = self.get_op_add_primary(instruction, operand_size)
+                b = self.read_op_add(instruction[1], "s", operand_size)
+                self.write_op_add(instruction[1], "s", ByteArray(size=operand_size, data=func(a, b)))
+            elif operation[1:3] == 1:  # lit -> indirect
+                a = self.read_op_add(instruction[1], "s", operand_size)
+                b = instruction[2:2+operand_size]
+                self.write_op_add(instruction[1], "s", ByteArray(size=operand_size, data=func(a, b)))
+            elif operation[1:3] == 2:  # lit -> memory
+                a = self.memory.read(instruction[1:3], operand_size)
+                b = instruction[3:3+operand_size]
+                self.memory.write_at(instruction[1:3], func(a, b), operand_size)
+            else:
+                return
+
+        elif core == "NOT":
+            operand_size = 4 if operation[0] else 1
+            source = self.get_op_add_primary(instruction, operand_size)
+            self.write_op_add(instruction[1], "s", -source)
 
         elif core == "BIT":
             content = self.get_op_add_primary(instruction, 1)

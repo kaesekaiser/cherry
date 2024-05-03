@@ -160,7 +160,7 @@ class Assembler:
             ret[6:8] = [int(primary.type == "ind"), int(secondary.type == "ind")]
         else:
             if primary.type == "lit":
-                ret[3:6] = [1, 0, 0]
+                ret[3:6] = [0 if primary.value == 0 else 1, 0, 0]
             elif primary.type == "mem":
                 ret[3:6] = [0, 0, 1]
             ret[6:8] = [1, 1]
@@ -292,23 +292,32 @@ class Assembler:
         if mnemonic == "PUSH":
             size = force_size if force_size else args[0].size
             opcode = self.mnemonics[f"{mnemonic}-{args[0].type[0].upper()}{'W' if size == 4 else 'B'}"].code
+            op_add = self.assemble_op_add(args[0])
+            if args[0].type == "lit" and args[0].value != 0:
+                givens = bytes(args[0])
 
         elif mnemonic == "POP":
             size = force_size if force_size else args[0].size
             opcode = self.mnemonics[f"{mnemonic}-{'W' if size == 4 else 'B'}"].code
+            op_add = self.assemble_op_add(args[0])
 
-        elif mnemonic in ("MOV", "ADD", "SUB", "CMP"):  # standard op-add commands
+        elif mnemonic in ("MOV", "ADD", "SUB", "CMP", "AND", "OR", "XOR"):  # standard op-add commands
             suffix = self.common_two_arg_suffix(*args, force_operand_size=force_size)
             opcode = self.mnemonics[f"{mnemonic}-{suffix}"].code
             if suffix in ("B", "W"):
                 op_add = self.assemble_op_add(*args)
-                if args[0].type in ("lit", "mem"):
+                if args[0].type == "mem" or (args[0].type == "lit" and args[0].value != 0):
                     givens = bytes(args[0])
             elif suffix.startswith("LITIND"):
                 op_add = bytes([args[1].value + 184])
                 givens = bytes(args[0])
             elif suffix.startswith("LITMEM"):
                 givens = bytes(args[1]) + bytes(args[0])
+
+        elif mnemonic == "NOT":
+            operand_size = force_size if force_size else args[0].size
+            opcode = self.mnemonics[f"{mnemonic}-{'W' if operand_size == 4 else 'B'}"].code
+            op_add = self.assemble_op_add(args[0], args[1])
 
         elif mnemonic == "BIT":
             if not (0 <= args[1].value <= 7):

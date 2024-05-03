@@ -364,6 +364,8 @@ class Machine:
             else:
                 return
 
+            self.flag_condition("Z", func(a, b) == 0)
+
         elif core == "NOT":
             operand_size = 4 if operation[0] else 1
             source = self.get_op_add_primary(instruction, operand_size)

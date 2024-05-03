@@ -157,7 +157,7 @@ class Assembler:
             ret[0:3] = convert_to_bits(self.register_pointers[secondary.value].op_add, 3)
         if primary.type == "reg" or primary.type == "ind":
             ret[3:6] = convert_to_bits(self.register_pointers[primary.value].op_add, 3)
-            ret[6:8] = [int(primary.type == "ind"), int(secondary.type == "ind")]
+            ret[6:8] = [int(primary.type == "ind"), int(isinstance(secondary, Argument) and secondary.type == "ind")]
         else:
             if primary.type == "lit":
                 ret[3:6] = [0 if primary.value == 0 else 1, 0, 0]
@@ -184,7 +184,7 @@ class Assembler:
 
         if arg1.type == "lit" and arg2.type != "reg":
             return f"LIT{'IND' if arg2.type == 'ind' else 'MEM'}{'W' if arg1.size == 4 else 'B'}"
-        operand_size = force_operand_size if force_operand_size else arg1.size if arg1.size else arg2.size
+        operand_size = force_operand_size if force_operand_size else self.intuitive_operand_size(arg1, arg2)
         return "W" if operand_size == 4 else "B"
 
     @staticmethod
@@ -228,6 +228,16 @@ class Assembler:
     def arg_count(self, mnemonic: str) -> int:
         return self.vague_mnemonics[mnemonic] if mnemonic in self.vague_mnemonics \
             else len(self.mnemonics[mnemonic].asm_args)
+
+    @staticmethod
+    def intuitive_operand_size(self, *args: Argument) -> int:
+        for arg in args:
+            if arg.type == "reg":
+                return arg.size
+        for arg in args:
+            if arg.type == "lit":
+                return arg.size
+        return 1
 
     def matching_mnemonics(self, mnemonic: str) -> list[Instruction]:
         return [v for v in self.mnemonics.values() if v.mnemonic.split("-")[0] == mnemonic] \
@@ -307,6 +317,7 @@ class Assembler:
             if suffix in ("B", "W"):
                 op_add = self.assemble_op_add(*args)
                 if args[0].type == "mem" or (args[0].type == "lit" and args[0].value != 0):
+                    args[0].lit_size = 4 if suffix == "W" else 1
                     givens = bytes(args[0])
             elif suffix.startswith("LITIND"):
                 op_add = bytes([args[1].value + 184])
@@ -364,9 +375,6 @@ class Assembler:
             if args[0].size != 1:
                 raise CherrySyntaxError(f"Oversize relative jump {self.on_line_x}: must be between -128 and 127")
             opcode = self.mnemonics[mnemonic].code
-            if args[0].type == "alias":
-                self.alias_sources[args[0].value] = self.alias_sources.get(args[0].value, []) + \
-                                                    [self.current_bytecode_length + 1]
             givens = bytes(args[0])
 
         elif mnemonic == "CALL":

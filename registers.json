@@ -60,6 +60,21 @@
         "op_add": 3
     },
     {
+        "pointer": 4,
+        "name": "GE",
+        "size": 4,
+        "children": {
+            "EL": 0
+        },
+        "op_add": 4
+    },
+    {
+        "pointer": 68,
+        "name": "EL",
+        "size": 1,
+        "op_add": 4
+    },
+    {
         "pointer": 128,
         "name": "IP",
         "size": 2
@@ -68,7 +83,7 @@
         "pointer": 129,
         "name": "SP",
         "size": 2,
-        "data": "11110000 00000000"
+        "data": "00 F0"
     },
     {
         "pointer": 130,

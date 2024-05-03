@@ -227,7 +227,7 @@ class Machine:
     def uses_full_op_add(opcode: int | Byte):
         if isinstance(opcode, int):
             opcode = Byte(opcode)
-        if opcode[1:3] == 0 and int(opcode[4:8]) in (6, 7, 10):  # mirrors physical implementation
+        if opcode[1:3] == 0 and int(opcode[4:8]) in (3, 4, 6, 7, 10):  # mirrors physical implementation
             return True
         if opcode[4:8] == 11:
             return True
@@ -363,7 +363,7 @@ class Machine:
         elif core == "BIT":
             content = self.get_op_add_primary(instruction, 1)
             bit = int(instruction[1][0:3])
-            self.flag_condition("Z", content[bit])
+            self.flag_condition("Z", content[0][bit])
 
         elif core == "REFBIT":
             content = self.read_op_add(instruction[1], "s", 1)

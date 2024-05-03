@@ -50,7 +50,7 @@ def convert_to_bits(data: SupportsBitConversion, length: int = 8) -> list[int]:
         elif re.fullmatch(r"[0-9A-Fa-f]{2}( +[0-9A-Fa-f]{2})*", data):
             return zero_pad([j for g in data.split() for j in convert_to_bits(int(g, 16), 8)], length)
         elif re.fullmatch(r"0x[0-9A-Fa-f]*", data):
-            return zero_pad([j for g in data[2:] for j in convert_to_bits(int(g, 16), 4)], length)
+            return zero_pad(convert_to_bits(int(data[2:], 16)), length)
         else:
             raise BitError(f"Invalid string format: {data}")
     elif isinstance(data, list):

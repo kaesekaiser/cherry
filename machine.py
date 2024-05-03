@@ -46,7 +46,7 @@ class Register:
     def write(self, data: SupportsBitConversion | Byte):
         self.bits = convert_to_bits(data, length=self.size * 8)
 
-    def write_at(self, address: int | ByteArray, data: SupportsBitConversion | Byte, no_bytes: int = 0):
+    def write_at(self, address: int | ByteArray, data: SupportsBitConversion | Byte, no_bytes: int = 1):
         if isinstance(address, ByteArray):
             address = address.value
         if isinstance(data, ByteArray):
@@ -72,7 +72,6 @@ class Drive(Register):
 # noinspection PyTupleAssignmentBalance
 class Machine:
     flag_names = {"Z": 0, "C": 1, "N": 2, "H": 7}
-    op_add_register_codes = "GA", "GB", "GC", "GD", None, None, None, None  # these will be set later
     save_on_call = ["GA", "GB", "GC", "GD", "FL", "RI", "RS"]
     # registers saved to the stack when executing a CALL instruction
 
@@ -84,12 +83,19 @@ class Machine:
         self.operation_counter = 0
         self.halted = False
 
+        self.op_add_registers = {}
+        for reg in self.register_names.values():
+            if reg.op_add != -1:
+                self.op_add_registers[reg.op_add] = self.op_add_registers.get(reg.op_add, {}) | {reg.size: reg}
+
     @property
     def state_map(self):
         return f"  [GA] {self.get_register('GA').hex}    [IP] {self.get_register('IP').hex}\n" \
                f"  [GB] {self.get_register('GB').hex}    [SP] {self.get_register('SP').hex}\n" \
                f"  [GC] {self.get_register('GC').hex}    [FL] {self.get_register('FL')}\n" \
-               f"  [GD] {self.get_register('GD').hex}         H----NCZ\n"
+               f"  [GD] {self.get_register('GD').hex}         H----NCZ\n" \
+               f"  [GE] {self.get_register('GE').hex}\n" \
+               f"{self.memory.read(self.get_register('GB').value, 16).hex}"
 
     def get_register(self, code: SupportsGetRegister) -> Register:
         if isinstance(code, Byte):
@@ -155,25 +161,28 @@ class Machine:
     def flag_condition(self, flag: str, condition: bool):
         self.get_register("FL").bits[self.flag_names[flag]] = int(condition)
 
-    def op_add_primary(self, op_add: Byte) -> tuple[str, str | int]:
+    def sized_op_add_register(self, op_add_code: int, operand_size: int) -> Register:
+        return self.op_add_registers[op_add_code][operand_size]
+
+    def op_add_primary(self, op_add: Byte, operand_size: int) -> tuple[str, str | int]:
         if op_add[6:8] == 3:
             return "special", ("null", "given_literal", None, None, "given_address", None, None, None)[int(op_add[3:6])]
         elif op_add[6:8] == 1:
-            return "memory", self.get_register(self.op_add_register_codes[int(op_add[3:6])]).value
+            return "memory", self.sized_op_add_register(int(op_add[3:6]), 4).value
         else:
-            return "register", self.op_add_register_codes[int(op_add[3:6])]
+            return "register", self.sized_op_add_register(int(op_add[3:6]), operand_size).pointer
 
-    def op_add_secondary(self, op_add: Byte) -> tuple[str, str | int]:
+    def op_add_secondary(self, op_add: Byte, operand_size: int) -> tuple[str, str | int]:
         if op_add[6:8] == 2:
-            return "memory", self.get_register(self.op_add_register_codes[int(op_add[0:3])]).value
+            return "memory", self.sized_op_add_register(int(op_add[0:3]), 4).value
         else:
-            return "register", self.op_add_register_codes[int(op_add[0:3])]
+            return "register", self.sized_op_add_register(int(op_add[0:3]), operand_size).pointer
 
     def read_op_add(self, op_add: Byte, which: str, operand_size: int) -> Byte | ByteArray:
         if which == "s":
-            src_type, src_value = self.op_add_secondary(op_add)
+            src_type, src_value = self.op_add_secondary(op_add, operand_size)
         else:  # which == "p"
-            src_type, src_value = self.op_add_primary(op_add)
+            src_type, src_value = self.op_add_primary(op_add, operand_size)
             if src_type == "special":
                 if src_value == "null":
                     return 0
@@ -185,9 +194,9 @@ class Machine:
 
     def write_op_add(self, op_add: Byte, which: str, data: ByteArray):
         if which == "s":
-            dest_type, dest_value = self.op_add_secondary(op_add)
+            dest_type, dest_value = self.op_add_secondary(op_add, operand_size=len(data))
         else:  # which == "p"
-            dest_type, dest_value = self.op_add_primary(op_add)
+            dest_type, dest_value = self.op_add_primary(op_add, operand_size=len(data))
             if dest_type == "special":
                 raise ValueError("Cannot write to special operands with write_op_add().")
         if dest_type == "register":
@@ -197,7 +206,7 @@ class Machine:
 
     def get_op_add_primary(self, instruction: ByteArray, operand_size: int, op_add_index: int = 1) -> ByteArray:
         """Gets the primary argument of an instruction with an op-add byte."""
-        op_type, op_value = self.op_add_primary(instruction[op_add_index])
+        op_type, op_value = self.op_add_primary(instruction[op_add_index], operand_size)
         if op_type == "special":
             if op_value == "none":
                 return ByteArray(operand_size, 0)
@@ -213,7 +222,7 @@ class Machine:
             return self.read_op_add(instruction[1], "p", operand_size)
 
     def op_add_givens_length(self, op_add: Byte, operand_size: int):
-        op_type, op_value = self.op_add_primary(op_add)
+        op_type, op_value = self.op_add_primary(op_add, operand_size)
         if op_type == "special":
             if op_value == "given_literal":
                 return operand_size

@@ -94,8 +94,7 @@ class Machine:
                f"  [GB] {self.get_register('GB').hex}    [SP] {self.get_register('SP').hex}\n" \
                f"  [GC] {self.get_register('GC').hex}    [FL] {self.get_register('FL')}\n" \
                f"  [GD] {self.get_register('GD').hex}         H----NCZ\n" \
-               f"  [GE] {self.get_register('GE').hex}\n" \
-               f"{self.memory.read(self.get_register('GB').value, 16).hex}"
+               f"  [GE] {self.get_register('GE').hex}\n"
 
     def get_register(self, code: SupportsGetRegister) -> Register:
         if isinstance(code, Byte):

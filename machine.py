@@ -264,6 +264,19 @@ class Machine:
         if mnemonic == "IFLTE":
             return self.get_flag("N") or self.get_flag("Z")
 
+    @staticmethod
+    def shift(data: ByteArray, n: int, mode: str = "l") -> ByteArray:
+        """Shifts the data n bits leftward (i.e. negative values are right shifts).
+        Modes: l (logical), a (arithmetic), r (rotate)"""
+        final_bit = data.bits[-1]
+        start = max(0, -n)
+        end = len(data.bits) - (1 if mode == "a" else 0) - max(0, n)
+        fill_data = (data.bits[:start] + data.bits[end:]) if mode == "r" else [0 for _ in range(abs(n))]
+        ret = ByteArray.from_bits((fill_data if n > 0 else []) + data.bits[start:end] + (fill_data if n < 0 else []))
+        if mode == "a":
+            ret.bits[-1] = final_bit
+        return ret
+
     def execute_instruction(self, raw_instruction: ByteArray):
         """Executes the instruction written into the given ByteArray.
 
@@ -369,6 +382,25 @@ class Machine:
             operand_size = 4 if operation[0] else 1
             source = self.get_op_add_primary(instruction, operand_size)
             self.write_op_add(instruction[1], "s", -source)
+
+        elif core in ("LSH", "RSH"):
+            operand_size = 4 if operation[0] else 1
+            if operation[1:3] == 0:  # register or indirect
+                content = self.get_op_add_primary(instruction, operand_size)
+                literal = instruction[2]
+                shift = int(literal[0:5]) * (-1 if core == "RSH" else 1)
+                mode = "a" if literal[6:8] == 1 else "r" if literal[6:8] == 2 else "l"
+                self.write_op_add(instruction[1], "p", self.shift(content, shift, mode))
+            elif operation[1:3] == 1:  # memory address
+                content = self.memory.read(instruction[1:3], operand_size)
+                literal = instruction[3]
+                shift = int(literal[0:5]) * (-1 if core == "RSH" else 1)
+                mode = "a" if literal[6:8] == 1 else "r" if literal[6:8] == 2 else "l"
+                self.memory.write_at(instruction[1:3], self.shift(content, shift, mode), operand_size)
+            else:
+                return
+
+            self.flag_condition("Z", self.shift(content, shift, mode) == 0)
 
         elif core == "BIT":
             content = self.get_op_add_primary(instruction, 1)

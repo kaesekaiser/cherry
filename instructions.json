@@ -115,7 +115,7 @@
         "asm_args": [
             [
                 "mem",
-                "alias"
+                "reference"
             ]
         ]
     },
@@ -161,7 +161,7 @@
         "asm_args": [
             [
                 "mem",
-                "alias"
+                "reference"
             ]
         ]
     },
@@ -1092,6 +1092,186 @@
             ],
             [
                 "mem"
+            ]
+        ]
+    },
+    {
+        "code": 144,
+        "mnemonic": "LSH-B",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            },
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "reg",
+                "ind"
+            ],
+            [
+                "lit"
+            ]
+        ]
+    },
+    {
+        "code": 145,
+        "mnemonic": "LSH-W",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            },
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "reg",
+                "ind"
+            ],
+            [
+                "lit"
+            ]
+        ]
+    },
+    {
+        "code": 146,
+        "mnemonic": "LSH-MEMB",
+        "operands": [
+            {
+                "type": "mem",
+                "bytes": 2
+            },
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "mem"
+            ],
+            [
+                "lit"
+            ]
+        ]
+    },
+    {
+        "code": 147,
+        "mnemonic": "LSH-MEMW",
+        "operands": [
+            {
+                "type": "mem",
+                "bytes": 2
+            },
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "mem"
+            ],
+            [
+                "lit"
+            ]
+        ]
+    },
+    {
+        "code": 152,
+        "mnemonic": "RSH-B",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            },
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "reg",
+                "ind"
+            ],
+            [
+                "lit"
+            ]
+        ]
+    },
+    {
+        "code": 153,
+        "mnemonic": "RSH-W",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            },
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "reg",
+                "ind"
+            ],
+            [
+                "lit"
+            ]
+        ]
+    },
+    {
+        "code": 154,
+        "mnemonic": "RSH-MEMB",
+        "operands": [
+            {
+                "type": "mem",
+                "bytes": 2
+            },
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "mem"
+            ],
+            [
+                "lit"
+            ]
+        ]
+    },
+    {
+        "code": 155,
+        "mnemonic": "RSH-MEMW",
+        "operands": [
+            {
+                "type": "mem",
+                "bytes": 2
+            },
+            {
+                "type": "lit",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "mem"
+            ],
+            [
+                "lit"
             ]
         ]
     },

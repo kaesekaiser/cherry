@@ -4,6 +4,7 @@ from machine import *
 
 
 space_replace = "冇"
+instruction_aliases = json.load(open("aliases.json"))
 
 
 class CherrySyntaxError(SyntaxError):
@@ -39,7 +40,7 @@ class Argument:
         return f"Type: {self.type} / Value: {self.value} / Bytes: {bytes(self).hex(sep=' ').upper()}"
 
     def __bytes__(self):
-        if self.type == "alias":
+        if self.type == "reference":
             return bytes(ByteArray(size=2, data=0))
         return bytes(ByteArray(len(self), 0 if isinstance(self.value, str) else self.value))
 
@@ -48,17 +49,21 @@ class Assembler:
     def __init__(self):
         self.opcodes = opcodes
         self.mnemonics = {g.mnemonic: g for g in opcodes.values()}
+        for alias, ref in instruction_aliases.items():
+            self.mnemonics.update(  # create duplicate entries for aliases
+                {"-".join([alias, *k.split("-")[1:]]): v for k, v in self.mnemonics.items() if k.split("-")[0] == ref}
+            )
         self.vague_mnemonics = {
-            g.mnemonic.split("-")[0]: len(g.asm_args)  # each asm mnemonic has exactly one expected arg count
-            for g in opcodes.values() if "-" in g.mnemonic
+            k.split("-")[0]: len(v.asm_args)  # each asm mnemonic has exactly one expected arg count
+            for k, v in self.mnemonics.items() if "-" in k
         }
         self.register_pointers = {g["pointer"]: Register.from_json(g) for g in registers}
         self.register_names = {g["name"]: Register.from_json(g) for g in registers}
         self.line_counter = 0
         self.current_bytecode_length = 0
-        self.aliases = {}
-        self.alias_sources = {}
-        self.alias_destinations = {}
+        self.named_references = {}
+        self.ref_sources = {}
+        self.ref_destinations = {}
 
     @property
     def on_line_x(self):
@@ -108,8 +113,8 @@ class Assembler:
         elif argument.upper() in self.register_names and self.register_names[argument.upper()].op_add != -1:
             return Argument("reg", self.register_names[argument.upper()].pointer)
 
-        elif argument.lower() in self.aliases:
-            return Argument("alias", argument.lower())
+        elif argument.lower() in self.named_references:
+            return Argument("reference", argument.lower())
 
         elif re.match(r"[01]{8}[bB]", argument):
             return Argument("lit", int(argument[:-1], 2), lit_size=force_size if force_size else 1)
@@ -188,12 +193,12 @@ class Assembler:
         return "W" if operand_size == 4 else "B"
 
     @staticmethod
-    def starts_with_alias(line: str) -> re.Match:
+    def starts_with_named_ref(line: str) -> re.Match:
         return re.match(r"(?i)[a-z_][a-z0-9_\-.]+:", line)
 
-    def is_reserved_name(self, alias: str):
-        return alias.upper() in self.register_names or alias.upper() in self.valid_mnemonics or \
-            self.is_valid_dec_literal(alias) or self.is_valid_hex_literal(alias)
+    def is_reserved_name(self, name: str):
+        return name.upper() in self.register_names or name.upper() in self.valid_mnemonics or \
+            self.is_valid_dec_literal(name) or self.is_valid_hex_literal(name)
 
     @staticmethod
     def format_string(s: str):
@@ -230,7 +235,7 @@ class Assembler:
             else len(self.mnemonics[mnemonic].asm_args)
 
     @staticmethod
-    def intuitive_operand_size(self, *args: Argument) -> int:
+    def intuitive_operand_size(*args: Argument) -> int:
         for arg in args:
             if arg.type == "reg":
                 return arg.size
@@ -243,14 +248,21 @@ class Assembler:
         return [v for v in self.mnemonics.values() if v.mnemonic.split("-")[0] == mnemonic] \
             if mnemonic in self.vague_mnemonics else [self.mnemonics[mnemonic]]
 
+    @staticmethod
+    def check_for_alias(mnemonic: str) -> str:
+        if (core := mnemonic.split("-")[0]) in instruction_aliases:
+            return "-".join([instruction_aliases[core], *mnemonic.split("-")[1:]])
+        else:
+            return mnemonic
+
     def assemble_instruction(self, raw_instruction: str) -> bytes:
         """Assembles one line of a file into bytecode."""
         s = raw_instruction.split("//")[0].strip(" \t\n")  # remove comments and trailing whitespace characters
         if not s:
             return bytes()
         
-        if match := self.starts_with_alias(s):
-            self.alias_destinations[match[0][:-1].lower()] = self.current_bytecode_length
+        if match := self.starts_with_named_ref(s):
+            self.ref_destinations[match[0][:-1].lower()] = self.current_bytecode_length
             s = s[match.end():].strip()
         if not s:
             return bytes()
@@ -262,17 +274,19 @@ class Assembler:
             # replace the spaces in strings with a different character so they don't get split up, then revert later
             s = s[:start] + s[start:stop].replace(" ", space_replace) + s[stop:]
 
-        mnemonic, s = match[0].strip().upper(), s[match.end():]
-        if mnemonic.startswith("IF") and mnemonic in self.valid_mnemonics:
-            prefix = bytes([self.mnemonics[mnemonic].code])
+        raw_mnemonic, s = match[0].strip().upper(), s[match.end():]
+        if raw_mnemonic.startswith("IF") and raw_mnemonic in self.valid_mnemonics:
+            prefix = bytes([self.mnemonics[raw_mnemonic].code])
             if not (match := re.match(r"(?i)[A-Z\-]+( +|$)", s)):
                 raise CherrySyntaxError(f"No mnemonic after conditional {self.on_line_x}: {raw_instruction}")
-            mnemonic, s = match[0].strip().upper(), s[match.end():]
+            raw_mnemonic, s = match[0].strip().upper(), s[match.end():]
         else:
             prefix = bytes()
 
-        if mnemonic not in self.valid_mnemonics:
+        if raw_mnemonic not in self.valid_mnemonics:
             raise CherrySyntaxError(f"Invalid mnemonic {self.on_line_x}: {raw_instruction}")
+
+        mnemonic = self.check_for_alias(raw_mnemonic)
 
         if "-" in mnemonic:
             if mnemonic.split("-")[1] == "B":
@@ -281,6 +295,7 @@ class Assembler:
                 force_size = 4
             else:
                 raise CherrySyntaxError(f"Over-specified mnemonic {self.on_line_x}: {raw_instruction}")
+            raw_mnemonic = raw_mnemonic.split("-")[0]
             mnemonic = mnemonic.split("-")[0]
         else:
             force_size = 0
@@ -325,6 +340,20 @@ class Assembler:
             elif suffix.startswith("LITMEM"):
                 givens = bytes(args[1]) + bytes(args[0])
 
+        elif mnemonic in ("LSH", "RSH"):
+            if not (0 <= args[1].value <= 31):
+                raise CherrySyntaxError(f"Invalid argument {self.on_line_x}: Shift arguments must be between 0 and 31.")
+            operand_size = force_size if force_size else args[0].size
+            operation = raw_mnemonic[1:]
+            offset = 128 if operation == "ROT" else 64 if operation == "ASH" else 0
+            if args[0].type == "mem":
+                opcode = self.mnemonics[f"{mnemonic}-MEM{'W' if operand_size == 4 else 'B'}"].code
+                givens = bytes(args[0]) + bytes([args[1].value + offset])
+            else:
+                opcode = self.mnemonics[f"{mnemonic}-{'W' if operand_size == 4 else 'B'}"].code
+                op_add = self.assemble_op_add(args[0])
+                givens = bytes([args[1].value + offset])
+
         elif mnemonic == "NOT":
             operand_size = force_size if force_size else args[0].size
             opcode = self.mnemonics[f"{mnemonic}-{'W' if operand_size == 4 else 'B'}"].code
@@ -366,9 +395,9 @@ class Assembler:
 
         elif mnemonic == "JMP":
             opcode = self.mnemonics[mnemonic].code
-            if args[0].type == "alias":
-                self.alias_sources[args[0].value] = self.alias_sources.get(args[0].value, []) + \
-                                                    [self.current_bytecode_length + 1]
+            if args[0].type == "reference":
+                self.ref_sources[args[0].value] = self.ref_sources.get(args[0].value, []) + \
+                                                  [self.current_bytecode_length + 1]
             givens = bytes(args[0])
         
         elif mnemonic == "JREL":
@@ -378,11 +407,11 @@ class Assembler:
             givens = bytes(args[0])
 
         elif mnemonic == "CALL":
-            if args[0].type in ("mem", "alias"):
+            if args[0].type in ("mem", "reference"):
                 opcode = self.mnemonics[mnemonic + "-MEM"].code
-                if args[0].type == "alias":
-                    self.alias_sources[args[0].value] = self.alias_sources.get(args[0].value, []) + \
-                                                        [self.current_bytecode_length + 1]
+                if args[0].type == "reference":
+                    self.ref_sources[args[0].value] = self.ref_sources.get(args[0].value, []) + \
+                                                      [self.current_bytecode_length + 1]
                 givens = bytes(args[0])
             else:
                 opcode = self.mnemonics[mnemonic + "-REG"].code
@@ -395,15 +424,16 @@ class Assembler:
         return prefix + instruction + op_add + givens
 
     def assemble_file(self, source_path: str, destination_path: str, mode: str = "b", allow_overwrite: bool = True):
-        # find all aliases first to allow for non-linear referencing
+        # find all named references first to allow for non-linear referencing
+        print("[SYS] Assembling file...")
         for n, line in enumerate(open(source_path, encoding="utf8")):
-            if match := self.starts_with_alias(line):
-                alias, s = match[0][:-1], line[match.end():].strip()
-                if self.is_reserved_name(alias):
-                    raise CherrySyntaxError(f"Reserved alias on line {n}: {alias}")
-                elif alias.lower() in self.aliases:
-                    raise CherrySyntaxError(f"Duplicate alias on line {n}: {alias}")
-                self.aliases[alias.lower()] = -1
+            if match := self.starts_with_named_ref(line):
+                name, s = match[0][:-1], line[match.end():].strip()
+                if self.is_reserved_name(name):
+                    raise CherrySyntaxError(f"Reserved name on line {n}: {name}")
+                elif name.lower() in self.named_references:
+                    raise CherrySyntaxError(f"Duplicate name on line {n}: {name}")
+                self.named_references[name.lower()] = -1
 
         # writing
         temp_path = f"tmp{int(time())}.chy"
@@ -432,10 +462,10 @@ class Assembler:
         # final checks
         try:
             with open(temp_path, "r+b") as fp:
-                for alias in self.aliases:
-                    for location in self.alias_sources.get(alias, []):
+                for name in self.named_references:
+                    for location in self.ref_sources.get(name, []):
                         fp.seek(location)
-                        fp.write(bytes(ByteArray(size=2, data=self.alias_destinations[alias])))
+                        fp.write(bytes(ByteArray(size=2, data=self.ref_destinations[name])))
             try:
                 os.rename(temp_path, destination_path)
             except FileExistsError as e:
@@ -449,4 +479,4 @@ class Assembler:
             os.remove(temp_path)
             raise e
         else:
-            print("[SYS] Assembly completed.")
+            print(f"[SYS] Assembly completed. Total length: {self.current_bytecode_length} bytes")

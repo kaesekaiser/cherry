@@ -406,7 +406,7 @@ class Assembler:
             opcode = self.mnemonics[mnemonic].code
             givens = bytes(args[0])
 
-        elif mnemonic == "CALL":
+        elif mnemonic in ("CALL", "LOCAL"):
             if args[0].type in ("mem", "reference"):
                 opcode = self.mnemonics[mnemonic + "-MEM"].code
                 if args[0].type == "reference":

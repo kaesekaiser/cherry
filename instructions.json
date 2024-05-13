@@ -166,6 +166,37 @@
         ]
     },
     {
+        "code": 42,
+        "mnemonic": "LOCAL-REG",
+        "operands": [
+            {
+                "type": "opadd",
+                "bytes": 1
+            }
+        ],
+        "asm_args": [
+            [
+                "reg"
+            ]
+        ]
+    },
+    {
+        "code": 43,
+        "mnemonic": "LOCAL-MEM",
+        "operands": [
+            {
+                "type": "mem",
+                "bytes": 2
+            }
+        ],
+        "asm_args": [
+            [
+                "mem",
+                "reference"
+            ]
+        ]
+    },
+    {
         "code": 47,
         "mnemonic": "RET",
         "operands": [],

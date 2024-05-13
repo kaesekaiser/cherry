@@ -71,9 +71,11 @@ class Drive(Register):
 
 # noinspection PyTupleAssignmentBalance
 class Machine:
-    flag_names = {"Z": 0, "C": 1, "N": 2, "H": 7}
-    save_on_call = ["GA", "GB", "GC", "GD", "FL", "RI", "RS"]
-    # registers saved to the stack when executing a CALL instruction
+    flag_names = {"Z": 0, "C": 1, "N": 2, "L": 6, "H": 7}
+    save_on_call = ["GA", "GB", "GC", "GD", "GE", "FL", "RI", "RS"]
+    # registers saved to the stack when executing a CALL instruction, and retrieved on RET
+    save_on_local = ["FL", "RI", "RS"]
+    # registers saved to the stack when executing a LOCAL instruction
 
     def __init__(self):
         self.register_names = {g["name"]: Register.from_json(g) for g in registers}
@@ -93,7 +95,7 @@ class Machine:
         return f"  [GA] {self.get_register('GA').hex}    [IP] {self.get_register('IP').hex}\n" \
                f"  [GB] {self.get_register('GB').hex}    [SP] {self.get_register('SP').hex}\n" \
                f"  [GC] {self.get_register('GC').hex}    [FL] {self.get_register('FL')}\n" \
-               f"  [GD] {self.get_register('GD').hex}         H----NCZ\n" \
+               f"  [GD] {self.get_register('GD').hex}         HL---NCZ\n" \
                f"  [GE] {self.get_register('GE').hex}\n"
 
     def get_register(self, code: SupportsGetRegister) -> Register:
@@ -444,22 +446,27 @@ class Machine:
             self.increment_reg("IP", instruction[1].signed_int())
             self.set_flag("H")
 
-        elif core == "CALL":
+        elif core in ("CALL", "LOCAL"):
             if suffix == "MEM":
                 dest = instruction[1:3]
             else:
                 dest = self.read_op_add(instruction[1], "p", 2)
-            self.push_all_registers()
+            for reg in (self.save_on_local if core == "LOCAL" else self.save_on_call):
+                self.push(self.get_register(reg).bytes)
             self.increment_reg("IP", self.instruction_length(raw_instruction))
             self.move_register("IP", "RI")
             self.move_register("SP", "RS")
             self.write_to_register("IP", dest)
+
             self.set_flag("H")
+            self.flag_condition("L", core == "LOCAL")
 
         elif core == "RET":
             self.move_register("RS", "SP")
             self.move_register("RI", "IP")
-            self.pop_all_registers()
+            for reg_name in (self.save_on_local if self.get_flag("L") else self.save_on_call).__reversed__():
+                reg = self.get_register(reg_name)
+                reg.write(self.pop(reg.size))
             self.set_flag("H")
 
         elif core == "HLT":

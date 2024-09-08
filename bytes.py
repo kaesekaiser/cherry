@@ -1,4 +1,3 @@
-import json
 import re
 from math import ceil
 
@@ -22,10 +21,6 @@ class Instruction:
         return bytes([self.code])
 
 
-instructions = json.load(open("instructions.json"))
-opcodes = {g["code"]: Instruction.from_json(g) for g in instructions}
-
-
 class BitError(ValueError):
     pass
 
@@ -40,7 +35,7 @@ def zero_pad(ls: list, length: int, zero=0):
 def convert_to_bits(data: SupportsBitConversion, length: int = 8) -> list[int]:
     if isinstance(data, int):
         if data < 0:
-            data += 2 ** length
+            data = data % (2 ** length)
         return [int(g) for g in f"{data:b}".rjust(length, "0")[:-(length+1):-1]]
     elif isinstance(data, str):
         if re.fullmatch(r"[01]{8}( +[01]{8})*", data):
@@ -58,7 +53,7 @@ def convert_to_bits(data: SupportsBitConversion, length: int = 8) -> list[int]:
     elif isinstance(data, Byte):
         return zero_pad(data.bits, length)
     elif isinstance(data, bytes):
-        return [j for g in list(data) for j in convert_to_bits(g)]
+        return zero_pad([j for g in list(data) for j in convert_to_bits(g)], length)
 
 
 class Byte:  # not a fan of the built-in binary classes
@@ -86,12 +81,6 @@ class Byte:  # not a fan of the built-in binary classes
     def value(self):
         return int("".join(str(g) for g in self.bits.__reversed__()), 2)
 
-    @property
-    def mnemonic(self) -> str:
-        if self.value in opcodes:
-            return opcodes[self.value].mnemonic
-        return "NOP"
-
     def __len__(self):
         return len(self.bits)
 
@@ -112,11 +101,34 @@ class Byte:  # not a fan of the built-in binary classes
             return self.value == other
         return self.bits == other.bits
 
+    def __gt__(self, other):
+        if isinstance(other, int):
+            return self.value > other
+        return self.value > other.value
+
+    def __ge__(self, other):
+        if isinstance(other, int):
+            return self.value >= other
+        return self.value >= other.value
+
+    def __lt__(self, other):
+        if isinstance(other, int):
+            return self.value < other
+        return self.value < other.value
+
+    def __le__(self, other):
+        if isinstance(other, int):
+            return self.value <= other
+        return self.value <= other.value
+
     def __lshift__(self, n):
         return self.__class__(data=[0 for _ in range(n)] + self.bits[:-n], size=self.size)
 
     def __rshift__(self, n):
         return self.__class__(data=self.bits[n:] + [0 for _ in range(n)], size=self.size)
+
+    def __bool__(self):
+        return any(self.bits)
 
     def __bytes__(self):
         return bytes([self.value])
@@ -186,10 +198,6 @@ class ByteArray(Byte):
     @property
     def opcode(self):
         return self.bytes[0].value
-
-    @property
-    def mnemonic(self) -> str:
-        return self.bytes[0].mnemonic
 
     def __str__(self):
         return " ".join(str(g) for g in self.bytes)

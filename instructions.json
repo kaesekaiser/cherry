@@ -9,6 +9,26 @@
         "register_dyad": 0,
         "address_dyad": 1
     },
+    "RINC": {
+        "nybble": 1,
+        "register_dyad": "register",
+        "address_dyad": 0
+    },
+    "RDEC": {
+        "nybble": 1,
+        "register_dyad": "register",
+        "address_dyad": 1
+    },
+    "LD:INDEXED": {
+        "nybble": 1,
+        "register_dyad": "register",
+        "address_dyad": 2
+    },
+    "ST:INDEXED": {
+        "nybble": 1,
+        "register_dyad": "register",
+        "address_dyad": 3
+    },
     "LD": {
         "nybble": 2,
         "register_dyad": "register",

@@ -4,6 +4,9 @@ import json
 import os
 
 
+COMMENT_PREFIX = "//"
+
+
 space_replace = "冇"
 mnemonics = json.load(open("instructions.json", "r"))
 mnemonics.update({v["alias"]: v for v in mnemonics.values() if v.get("alias")})
@@ -101,25 +104,27 @@ class Assembler:
         elif self.is_valid_dec_literal(argument):
             return Argument(0, int(argument) % 256)
 
-        elif re.match(r"[#@]", argument):
-            if re.fullmatch(r"[#@][0-9]+", argument):
+        elif re.match(r"[@#$]", argument):
+            if re.fullmatch(r"[@#$][0-9]+", argument):
                 n = int(argument[1:])
-            elif re.fullmatch(r"(?i)[#@][0-9a-f]+h", argument):
+            elif re.fullmatch(r"(?i)[@#$][0-9a-f]+h", argument):
                 n = int(argument[1:-1], 16)
             else:
                 raise CherrySyntaxError(f"Invalid memory address {self.on_line_x}: {argument}")
             if not (0 <= n < 65536):
                 raise CherrySyntaxError(f"Out-of-bounds reference {self.on_line_x}: {argument}")
-            if argument.startswith("@") and n >= 256:
-                raise CherrySyntaxError(f"Out-of-bounds indexed reference {self.on_line_x}: {argument}")
-            return Argument(2 if argument.startswith("@") else 1 if n < 256 else 3, n)
+            if argument.startswith("$") and n > 255:
+                raise CherrySyntaxError(f"Out-of-bounds scratch reference {self.on_line_x}: {argument}")
+            if argument.startswith("@") and n > 255:
+                raise CherrySyntaxError(f"Out-of-bounds indexed scratch reference {self.on_line_x}: {argument}")
+            return Argument(4 if argument[0] == "@" else 2 if argument[0] == "$" else 1 if n < 256 else 3, n)
 
         else:
             raise CherrySyntaxError(f"Invalid argument {self.on_line_x}: {argument}")
 
     def assemble_instruction(self, raw_instruction: str) -> bytes:
         """Assembles one line of a file into bytecode."""
-        s = raw_instruction.split("//")[0].strip(" \t\n")  # remove comments and trailing whitespace characters
+        s = raw_instruction.split(COMMENT_PREFIX)[0].strip(" \t\n")  # remove comments and whitespace characters
         if not s:
             return bytes()
 
@@ -166,7 +171,11 @@ class Assembler:
                 if argument.address_mode == codes.get("disallowed_address"):
                     raise CherrySyntaxError(f"Disallowed address mode {argument.address_mode} for {mnemonic} "
                                             f"{self.on_line_x}: {raw_instruction}")
-                address_dyad = argument.address_mode
+                if argument.address_mode == 4:
+                    codes = mnemonics[mnemonic + ":INDEXED"]
+                    address_dyad = codes["address_dyad"]
+                else:
+                    address_dyad = argument.address_mode
                 immediate = bytes(argument)
         else:
             address_dyad = codes["address_dyad"]
